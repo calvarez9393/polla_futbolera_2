@@ -1,0 +1,61 @@
+import { describe, expect, it } from "vitest";
+import { computePredictionPoints } from "./rules.js";
+import { DEFAULT_OFFICIAL_RULES } from "./rulesConfig.js";
+const rules = DEFAULT_OFFICIAL_RULES;
+describe("computePredictionPoints — Fase 1", () => {
+    it("marcador exacto Colombia 2-1", () => {
+        const result = computePredictionPoints({
+            predictedHome: 2,
+            predictedAway: 1,
+            realHome: 2,
+            realAway: 1,
+            roundKey: "GROUP",
+            rules
+        });
+        expect(result.points).toBe(10);
+        expect(result.breakdown.winner).toBe(3);
+        expect(result.breakdown.goalDiff).toBe(2);
+        expect(result.breakdown.exactScore).toBe(5);
+    });
+    it("ganador y diferencia sin exacto", () => {
+        const result = computePredictionPoints({
+            predictedHome: 3,
+            predictedAway: 1,
+            realHome: 2,
+            realAway: 0,
+            roundKey: "GROUP",
+            rules
+        });
+        expect(result.points).toBe(5);
+    });
+    it("empate con marcador exacto", () => {
+        const result = computePredictionPoints({
+            predictedHome: 1,
+            predictedAway: 1,
+            realHome: 1,
+            realAway: 1,
+            roundKey: "GROUP",
+            rules
+        });
+        expect(result.points).toBe(8);
+        expect(result.breakdown.draw).toBe(3);
+        expect(result.breakdown.exactScore).toBe(5);
+    });
+});
+describe("computePredictionPoints — Fase 2 octavos", () => {
+    it("clasificado y marcador exacto", () => {
+        const result = computePredictionPoints({
+            predictedHome: 2,
+            predictedAway: 1,
+            realHome: 2,
+            realAway: 1,
+            roundKey: "R8",
+            predictedAdvancingTeamId: 10,
+            winnerTeamId: 10,
+            rules
+        });
+        expect(result.points).toBe(13);
+        expect(result.breakdown.advancing).toBe(8);
+        expect(result.breakdown.exactScore).toBe(5);
+    });
+});

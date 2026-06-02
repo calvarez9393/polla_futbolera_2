@@ -1,0 +1,86 @@
+# Desarrollo con hot reload (backend: tsx watch, frontend: Vite HMR)
+# Uso: docker compose up --build   (incluido desde docker-compose.yml)
+# App: http://localhost:5173  |  API: http://localhost:4000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: polla_postgres_dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - polla_pg_data_dev:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - polla_network_dev
+
+  backend:
+    image: node:22-alpine
+    container_name: polla_backend_dev
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      CORS_ORIGIN: http://localhost:5173,http://localhost:8080
+      CHOKIDAR_USEPOLLING: "true"
+      API_FOOTBALL_BASE_URL: ${API_FOOTBALL_BASE_URL}
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY}
+      API_FOOTBALL_HOST: ${API_FOOTBALL_HOST}
+      API_FOOTBALL_LEAGUE_ID: ${API_FOOTBALL_LEAGUE_ID}
+      API_FOOTBALL_SEASON: ${API_FOOTBALL_SEASON}
+      SYNC_CRON: ${SYNC_CRON}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-1000000001}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin1234}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh ./docker-entrypoint.dev.sh
+    networks:
+      - polla_network_dev
+
+  frontend:
+    image: node:22-alpine
+    container_name: polla_frontend_dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      VITE_API_URL: /api
+      VITE_PROXY_TARGET: http://backend:4000
+      VITE_HMR_HOST: localhost
+      VITE_HMR_PORT: "5173"
+    depends_on:
+      - backend
+    command: sh ./docker-entrypoint.dev.sh
+    networks:
+      - polla_network_dev
+
+volumes:
+  polla_pg_data_dev:
+  backend_node_modules:
+  frontend_node_modules:
+
+networks:
+  polla_network_dev:

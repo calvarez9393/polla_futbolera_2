@@ -1,0 +1,57 @@
+/** Códigos ISO para banderas (flagcdn.com) — nombres en español del import WC2026 */
+export const TEAM_FLAG_CODES: Record<string, string> = {
+  México: "mx",
+  Sudáfrica: "za",
+  "Corea del Sur": "kr",
+  "República Checa": "cz",
+  Canadá: "ca",
+  Suiza: "ch",
+  Catar: "qa",
+  "Bosnia y Herzegovina": "ba",
+  Brasil: "br",
+  Marruecos: "ma",
+  Haití: "ht",
+  Escocia: "gb-sct",
+  "Estados Unidos": "us",
+  Paraguay: "py",
+  Australia: "au",
+  Turquía: "tr",
+  Alemania: "de",
+  Curazao: "cw",
+  "Costa de Marfil": "ci",
+  Ecuador: "ec",
+  "Países Bajos": "nl",
+  Japón: "jp",
+  Suecia: "se",
+  Túnez: "tn",
+  Bélgica: "be",
+  Egipto: "eg",
+  Irán: "ir",
+  "Nueva Zelanda": "nz",
+  España: "es",
+  "Cabo Verde": "cv",
+  "Arabia Saudita": "sa",
+  Uruguay: "uy",
+  Francia: "fr",
+  Senegal: "sn",
+  Noruega: "no",
+  Irak: "iq",
+  Argentina: "ar",
+  Argelia: "dz",
+  Austria: "at",
+  Jordania: "jo",
+  Portugal: "pt",
+  "RD Congo": "cd",
+  Uzbekistán: "uz",
+  Colombia: "co",
+  Inglaterra: "gb-eng",
+  Croacia: "hr",
+  Ghana: "gh",
+  Panamá: "pa"
+};
+
+export function flagUrlForTeam(name: string, width = 80): string | null {
+  const code = TEAM_FLAG_CODES[name];
+  if (!code) return null;
+  return `https://flagcdn.com/w${width}/${code}.png`;
+}

@@ -1,0 +1,133 @@
+/**
+ * Tema Polla Futbolera — oscuro sobrio, estados de partido claros.
+ */
+:root {
+  /* Neutros (zinc) */
+  --c-50: #fafafa;
+  --c-100: #f4f4f5;
+  --c-200: #e4e4e7;
+  --c-300: #d4d4d8;
+  --c-400: #a1a1aa;
+  --c-500: #71717a;
+  --c-600: #52525b;
+  --c-700: #3f3f46;
+  --c-800: #27272a;
+  --c-900: #18181b;
+  --c-950: #09090b;
+
+  --os-50: var(--c-50);
+  --os-100: var(--c-100);
+  --os-200: var(--c-200);
+  --os-300: var(--c-300);
+  --os-400: var(--c-400);
+  --os-500: var(--c-500);
+  --os-600: var(--c-600);
+  --os-700: var(--c-700);
+  --os-800: var(--c-800);
+  --os-900: var(--c-900);
+  --os-950: var(--c-950);
+
+  /* Marca — azul hielo */
+  --accent: #7dd3fc;
+  --accent-soft: #bae6fd;
+  --accent-dim: #38bdf8;
+
+  --brand: var(--accent);
+  --brand-bright: var(--accent-soft);
+  --brand-dim: var(--accent-dim);
+  --brand-deep: #1e3a5f;
+  --brand-deeper: var(--c-900);
+
+  --bg-base: var(--c-950);
+  --bg-mid: var(--c-900);
+  --bg-elevated: var(--c-800);
+  --bg-surface: color-mix(in srgb, var(--c-800) 88%, var(--c-900));
+  --bg-overlay: color-mix(in srgb, var(--c-950) 45%, transparent);
+  --bg-input: var(--c-900);
+
+  --border-default: color-mix(in srgb, var(--c-600) 70%, transparent);
+  --border-strong: color-mix(in srgb, var(--c-500) 50%, transparent);
+  --border-subtle: color-mix(in srgb, var(--c-700) 90%, transparent);
+  --border-focus: color-mix(in srgb, var(--accent) 50%, transparent);
+
+  --text: var(--c-100);
+  --text-muted: var(--c-400);
+  --text-on-brand: var(--c-950);
+
+  --glow-brand: color-mix(in srgb, var(--accent) 30%, transparent);
+  --glow-brand-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --shadow-brand: color-mix(in srgb, var(--c-950) 75%, transparent);
+
+  /* Estados de partido */
+  --status-finished: #34d399;
+  --status-finished-dim: #059669;
+  --status-finished-muted: #6ee7b7;
+  --status-pending: #94a3b8;
+  --status-pending-dim: #64748b;
+  --status-live: #fb923c;
+
+  --finished-accent: var(--status-finished);
+  --finished-accent-dim: var(--status-finished-dim);
+  --finished-score: #ecfdf5;
+  --finished-score-bg: color-mix(in srgb, var(--status-finished-dim) 35%, var(--c-800));
+  --finished-border: color-mix(in srgb, var(--status-finished) 40%, var(--c-600));
+  --finished-card-border: color-mix(in srgb, var(--status-finished) 35%, var(--c-700));
+  --finished-card-bg: color-mix(in srgb, var(--status-finished-dim) 12%, var(--c-800));
+
+  --pending-accent: var(--status-pending);
+  --pending-accent-dim: var(--status-pending-dim);
+  --pending-card-border: var(--c-700);
+  --pending-card-bg: var(--c-900);
+
+  --live-accent: var(--status-live);
+  --live-card-border: color-mix(in srgb, var(--status-live) 40%, var(--c-700));
+  --live-card-bg: color-mix(in srgb, var(--status-live) 8%, var(--c-900));
+
+  --gradient-pill: linear-gradient(90deg, #38bdf8 0%, #7dd3fc 50%, #bae6fd 100%);
+  --gradient-wc-hero: linear-gradient(
+    165deg,
+    var(--c-950) 0%,
+    var(--c-900) 50%,
+    color-mix(in srgb, #1e293b 40%, var(--c-950)) 100%
+  );
+  --gradient-beam: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, transparent),
+    transparent
+  );
+
+  --badge-live-bg: color-mix(in srgb, var(--status-live) 18%, var(--c-900));
+  --badge-live-text: #fed7aa;
+  --badge-live-border: color-mix(in srgb, var(--status-live) 50%, transparent);
+  --badge-done-bg: color-mix(in srgb, var(--status-finished-dim) 40%, var(--c-900));
+  --badge-done-text: var(--status-finished-muted);
+  --badge-done-border: color-mix(in srgb, var(--status-finished) 45%, transparent);
+  --badge-scheduled-bg: color-mix(in srgb, var(--c-700) 50%, var(--c-900));
+  --badge-scheduled-text: var(--c-300);
+  --badge-scheduled-border: var(--c-600);
+
+  --alert-error-bg: color-mix(in srgb, #f87171 15%, var(--c-900));
+  --alert-error-border: color-mix(in srgb, #f87171 40%, transparent);
+  --alert-error-text: #fecaca;
+  --alert-success-bg: color-mix(in srgb, var(--status-finished-dim) 25%, var(--c-900));
+  --alert-success-border: color-mix(in srgb, var(--status-finished) 40%, transparent);
+  --alert-success-text: #a7f3d0;
+
+  --purple-deep: var(--bg-base);
+  --purple-mid: var(--bg-mid);
+  --purple-card: var(--bg-surface);
+  --purple-border: var(--border-default);
+  --magenta: var(--brand);
+  --magenta-soft: var(--brand-dim);
+  --red-accent: #f87171;
+
+  /* Legacy aliases */
+  --wc-night-300: var(--c-300);
+  --wc-night-600: var(--c-600);
+  --wc-night-800: var(--c-800);
+  --wc-night-900: var(--c-900);
+  --wc-us-navy: #1e293b;
+  --wc-gold-soft: var(--accent-soft);
+
+  color-scheme: dark;
+}

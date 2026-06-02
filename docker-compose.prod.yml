@@ -1,0 +1,81 @@
+# Producción local (build estático + nginx en :8080)
+# Uso: docker compose -f docker-compose.prod.yml up --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: polla_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - polla_pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - polla_network
+
+  backend:
+    build:
+      context: ./backend
+    container_name: polla_backend
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      API_FOOTBALL_BASE_URL: ${API_FOOTBALL_BASE_URL}
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY}
+      API_FOOTBALL_HOST: ${API_FOOTBALL_HOST}
+      API_FOOTBALL_LEAGUE_ID: ${API_FOOTBALL_LEAGUE_ID}
+      API_FOOTBALL_SEASON: ${API_FOOTBALL_SEASON}
+      SYNC_CRON: ${SYNC_CRON}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-1000000001}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin1234}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    networks:
+      - polla_network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    container_name: polla_frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    networks:
+      - polla_network
+
+volumes:
+  polla_pg_data:
+
+networks:
+  polla_network:

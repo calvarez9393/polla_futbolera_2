@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — polla_futbolera
+#
+# Cómo usar:
+#   1. Push este repo a GitHub / GitLab
+#   2. Render Dashboard → New → Blueprint → selecciona el repo
+#   3. Render desplegará: PostgreSQL + backend + frontend estático
+#
+# URLs generadas (si los nombres están disponibles):
+#   Backend  → https://polla-backend.onrender.com
+#   Frontend → https://polla-futbolera.onrender.com
+#
+# Si Render añade un sufijo al nombre (ej. polla-backend-abc1),
+# actualiza manualmente en el dashboard:
+#   - Backend  → CORS_ORIGIN = URL real del frontend
+#   - Frontend → VITE_API_URL = URL real del backend (requiere re-deploy)
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: polla-db
+    plan: free
+    databaseName: polla_futbolera
+    user: polla
+
+services:
+  # ── Backend (Express + node-cron) ──────────────────────────────────────────
+  - type: web
+    name: polla-backend
+    plan: free
+    env: docker
+    dockerContext: backend
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: polla-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        value: https://polla-futbolera.onrender.com
+      - key: API_FOOTBALL_KEY
+        value: replace_me          # Cambia esto en el dashboard por tu key real
+      - key: API_FOOTBALL_LEAGUE_ID
+        value: "1"
+      - key: API_FOOTBALL_SEASON
+        value: "2026"
+      - key: SYNC_CRON
+        value: "*/15 * * * *"
+      - key: ADMIN_LOGIN
+        value: "1000000001"
+      - key: ADMIN_PASSWORD
+        generateValue: true        # Ver valor en: dashboard → polla-backend → Environment
+
+  # ── Frontend (React/Vite SPA estático) ─────────────────────────────────────
+  - type: web
+    name: polla-futbolera
+    plan: free
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://polla-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
