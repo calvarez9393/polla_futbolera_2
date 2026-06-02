@@ -26,7 +26,6 @@ services:
   # ── Backend (Express + node-cron) ──────────────────────────────────────────
   - type: web
     name: polla-backend
-    plan: free
     env: docker
     dockerContext: backend
     dockerfilePath: backend/Dockerfile
@@ -59,7 +58,6 @@ services:
   # ── Frontend (React/Vite SPA estático) ─────────────────────────────────────
   - type: web
     name: polla-futbolera
-    plan: free
     env: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
