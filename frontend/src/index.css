@@ -1427,6 +1427,10 @@ p {
   color: var(--text);
 }
 
+.prize-pool-value--gold   { color: #fbbf24; }
+.prize-pool-value--silver { color: #94a3b8; }
+.prize-pool-value--bronze { color: #c2855a; }
+
 .stats-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

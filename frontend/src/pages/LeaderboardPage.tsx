@@ -34,6 +34,9 @@ export function LeaderboardPage() {
 
   const totalRecaudo = rows.reduce((sum, r) => sum + Number(r.amount_paid ?? 0), 0);
   const premio = totalRecaudo * 0.7;
+  const primero = premio * 0.5;
+  const segundo = premio * 0.3;
+  const tercero = premio * 0.2;
 
   return (
     <>
@@ -43,16 +46,26 @@ export function LeaderboardPage() {
         puntos en semis/final.
       </p>
 
-      {!loading && totalRecaudo > 0 && (
+      {!loading && premio > 0 && (
         <div className="prize-pool-banner">
-          <div className="prize-pool-item">
-            <span className="prize-pool-label">Recaudo acumulado</span>
-            <span className="prize-pool-value">{fmt.format(totalRecaudo)}</span>
+          <div className="prize-pool-item prize-pool-item--highlight">
+            <span className="prize-pool-label">Bote (70%)</span>
+            <span className="prize-pool-value">{fmt.format(premio)}</span>
           </div>
           <div className="prize-pool-divider" />
-          <div className="prize-pool-item prize-pool-item--highlight">
-            <span className="prize-pool-label">Premio (70%)</span>
-            <span className="prize-pool-value">{fmt.format(premio)}</span>
+          <div className="prize-pool-item">
+            <span className="prize-pool-label">1° lugar (50%)</span>
+            <span className="prize-pool-value prize-pool-value--gold">{fmt.format(primero)}</span>
+          </div>
+          <div className="prize-pool-divider" />
+          <div className="prize-pool-item">
+            <span className="prize-pool-label">2° lugar (30%)</span>
+            <span className="prize-pool-value prize-pool-value--silver">{fmt.format(segundo)}</span>
+          </div>
+          <div className="prize-pool-divider" />
+          <div className="prize-pool-item">
+            <span className="prize-pool-label">3° lugar (20%)</span>
+            <span className="prize-pool-value prize-pool-value--bronze">{fmt.format(tercero)}</span>
           </div>
         </div>
       )}
