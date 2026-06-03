@@ -1,6 +1,12 @@
 node_modules
+dist/
+build/
+.vscode/
 
 .env
 *.env
 !.env.example
 !.env.docker.example
+
+*.log
+*.tsbuildinfo
