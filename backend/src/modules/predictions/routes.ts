@@ -34,6 +34,7 @@ import {
   enrichQualifiersForApi,
   syncUserQualifierPredictions
 } from "../qualifiers/fromPredictions.js";
+import { fetchUserScores } from "../leaderboard/userScores.js";
 
 const calendarQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -205,172 +206,9 @@ predictionsRouter.post("/", async (req, res, next) => {
   }
 });
 
-function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
-  const fromBreakdown = breakdown.date;
-  if (typeof fromBreakdown === "string" && fromBreakdown.length >= 10) {
-    return fromBreakdown.slice(0, 10);
-  }
-  const raw = String(sourceId);
-  if (raw.length === 8) {
-    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
-  }
-  return raw;
-}
-
-function mapExtraScore(row: {
-  source_type: string;
-  source_id: number;
-  points: number;
-  breakdown: Record<string, unknown>;
-  updated_at: Date;
-}) {
-  const breakdown = (row.breakdown ?? {}) as Record<string, unknown>;
-  const base = {
-    sourceType: row.source_type,
-    sourceId: row.source_id,
-    points: row.points as number,
-    breakdown: breakdown as Record<string, number>,
-    updatedAt: row.updated_at
-  };
-
-  switch (row.source_type) {
-    case "QUALIFIERS":
-      return {
-        ...base,
-        section: "qualifiers" as const,
-        title: "Clasificados de grupos",
-        description: "Aciertos entre los 24 directos (top 2 por grupo); el cuadro de dieciseisavos usa 32 equipos"
-      };
-    case "BONUSES":
-      return {
-        ...base,
-        section: "bonuses" as const,
-        title: "Cuadro y premios especiales",
-        description: "Campeón, finalistas, goleador y premios del cuadro"
-      };
-    case "EXPERT_DAY": {
-      const day = formatExpertDayLabel(row.source_id, breakdown);
-      return {
-        ...base,
-        section: "phase1" as const,
-        title: "Experto del día",
-        description: `Jornada del ${day}: acertaste el 1X2 en todos los partidos del día`
-      };
-    }
-    case "INVICTO":
-      return {
-        ...base,
-        section: "phase1" as const,
-        title: "Invicto",
-        description: `Racha de ${breakdown.maxStreak ?? 10} aciertos consecutivos de resultado (1X2)`
-      };
-    case "GROUP_MASTER":
-      return {
-        ...base,
-        section: "phase1" as const,
-        title: `Maestro de grupo ${breakdown.groupName ?? ""}`.trim(),
-        description: "Acertaste los 2 clasificados oficiales de este grupo"
-      };
-    default:
-      return {
-        ...base,
-        section: "other" as const,
-        title: row.source_type,
-        description: null as string | null
-      };
-  }
-}
-
 predictionsRouter.get("/me/scores", async (req, res, next) => {
   try {
-    const userId = req.user!.id;
-    const totalResult = await pool.query(
-      `SELECT COALESCE(SUM(points), 0)::int AS total_points
-      FROM prediction_scores WHERE user_id = $1`,
-      [userId]
-    );
-    const bySourceResult = await pool.query(
-      `SELECT source_type, COALESCE(SUM(points), 0)::int AS points
-      FROM prediction_scores WHERE user_id = $1
-      GROUP BY source_type`,
-      [userId]
-    );
-    const matchesResult = await pool.query(
-      `SELECT
-        ps.points,
-        ps.breakdown,
-        m.id AS match_id,
-        m.starts_at,
-        m.status,
-        m.stage,
-        m.round_key,
-        m.round_label,
-        m.home_score,
-        m.away_score,
-        g.name AS group_name,
-        ht.name AS home_team_name,
-        ht.logo_url AS home_team_logo_url,
-        at.name AS away_team_name,
-        at.logo_url AS away_team_logo_url,
-        p.predicted_home_score,
-        p.predicted_away_score
-      FROM prediction_scores ps
-      JOIN matches m ON m.id = ps.source_id AND ps.source_type = 'MATCH'
-      JOIN teams ht ON ht.id = m.home_team_id
-      JOIN teams at ON at.id = m.away_team_id
-      LEFT JOIN groups g ON g.id = m.group_id
-      LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = ps.user_id
-      WHERE ps.user_id = $1
-      ORDER BY m.starts_at DESC`,
-      [userId]
-    );
-    const extrasResult = await pool.query(
-      `SELECT source_type, source_id, points, breakdown, updated_at
-      FROM prediction_scores
-      WHERE user_id = $1 AND source_type <> 'MATCH'
-      ORDER BY updated_at DESC`,
-      [userId]
-    );
-
-    const totalsBySource: Record<string, number> = {};
-    for (const row of bySourceResult.rows) {
-      totalsBySource[row.source_type as string] = row.points as number;
-    }
-
-    res.json({
-      totalPoints: totalResult.rows[0].total_points,
-      totalsBySource,
-      matchPointsTotal: totalsBySource.MATCH ?? 0,
-      extrasPointsTotal: (totalResult.rows[0].total_points as number) - (totalsBySource.MATCH ?? 0),
-      matches: matchesResult.rows.map((row) => ({
-        matchId: row.match_id,
-        startsAt: row.starts_at,
-        status: row.status,
-        stage: row.stage,
-        roundKey: row.round_key,
-        roundLabel: row.round_label,
-        groupName: row.group_name,
-        homeTeamName: row.home_team_name,
-        homeTeamLogoUrl: row.home_team_logo_url,
-        awayTeamName: row.away_team_name,
-        awayTeamLogoUrl: row.away_team_logo_url,
-        homeScore: row.home_score,
-        awayScore: row.away_score,
-        predictedHomeScore: row.predicted_home_score,
-        predictedAwayScore: row.predicted_away_score,
-        points: row.points,
-        breakdown: row.breakdown
-      })),
-      extras: extrasResult.rows.map((row) =>
-        mapExtraScore({
-          source_type: row.source_type as string,
-          source_id: row.source_id as number,
-          points: row.points as number,
-          breakdown: row.breakdown as Record<string, unknown>,
-          updated_at: row.updated_at as Date
-        })
-      )
-    });
+    res.json(await fetchUserScores(req.user!.id));
   } catch (error) {
     next(error);
   }
@@ -528,36 +366,37 @@ predictionsRouter.post("/me/qualifiers/recompute", async (req, res, next) => {
 predictionsRouter.get("/me/bonuses", async (req, res, next) => {
   try {
     const userId = req.user!.id;
-    await syncUserBonusPicksFromBracket(userId);
+    const derived = await syncUserBonusPicksFromBracket(userId);
     const teams = await pool.query(
       `SELECT id, name, logo_url FROM teams
       WHERE external_id LIKE 'wc2026-%' AND external_id != 'wc2026-tbd'
       ORDER BY name`
     );
-    const row = await pool.query("SELECT * FROM bonus_predictions WHERE user_id = $1", [userId]);
+    const row = await pool.query(
+      "SELECT top_scorer, top_assister FROM bonus_predictions WHERE user_id = $1",
+      [userId]
+    );
     const score = await pool.query(
       `SELECT points, breakdown FROM prediction_scores
       WHERE user_id = $1 AND source_type = 'BONUSES' AND source_id = 0`,
       [userId]
     );
-    const b = row.rows[0];
+    const extras = row.rows[0];
     res.json({
       teams: teams.rows.map((t) => ({
         id: Number(t.id),
         name: t.name,
         logoUrl: t.logo_url
       })),
-      picks: b
-        ? {
-            championTeamId: b.champion_team_id ? Number(b.champion_team_id) : null,
-            runnerUpTeamId: b.runner_up_team_id ? Number(b.runner_up_team_id) : null,
-            thirdPlaceTeamId: b.third_place_team_id ? Number(b.third_place_team_id) : null,
-            semifinalistTeamIds: (b.semifinalist_team_ids ?? []).map(Number),
-            finalistTeamIds: (b.finalist_team_ids ?? []).map(Number),
-            topScorer: b.top_scorer,
-            topAssister: b.top_assister
-          }
-        : null,
+      picks: {
+        championTeamId: derived.championTeamId,
+        runnerUpTeamId: derived.runnerUpTeamId,
+        thirdPlaceTeamId: derived.thirdPlaceTeamId,
+        semifinalistTeamIds: derived.semifinalistTeamIds,
+        finalistTeamIds: derived.finalistTeamIds,
+        topScorer: extras?.top_scorer ?? null,
+        topAssister: extras?.top_assister ?? null
+      },
       earnedPoints: score.rows[0]?.points ?? null,
       earnedBreakdown: score.rows[0]?.breakdown ?? null,
       derivedFromBracket: true

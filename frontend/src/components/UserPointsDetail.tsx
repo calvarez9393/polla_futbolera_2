@@ -55,7 +55,13 @@ function matchSubtitle(m: ScoreMatch): string {
   return m.stage === "KNOCKOUT" ? "Eliminatorias" : "Fase de grupos";
 }
 
-function MatchPointsCard({ match }: { match: ScoreMatch }) {
+function MatchPointsCard({
+  match,
+  predictionLabel = "Tu predicción"
+}: {
+  match: ScoreMatch;
+  predictionLabel?: string;
+}) {
   return (
     <article className={`user-points-card user-points-card--match match-card${matchCardStatusClass(match.status)}`}>
       <header className="user-points-card-head">
@@ -78,7 +84,7 @@ function MatchPointsCard({ match }: { match: ScoreMatch }) {
         </div>
         {match.predictedHomeScore != null && (
           <div>
-            <span className="user-points-mini-label">Tu predicción</span>
+            <span className="user-points-mini-label">{predictionLabel}</span>
             <strong>
               {match.predictedHomeScore} : {match.predictedAwayScore}
             </strong>
@@ -120,22 +126,33 @@ function ExtraPointsCard({ item }: { item: ExtraScore }) {
   );
 }
 
-export function UserPointsDetail() {
+export interface UserPointsDetailProps {
+  /** Si se omite, carga los puntos del usuario autenticado. */
+  userId?: number;
+  /** Oculta el bloque de resumen (útil en modal compacto). */
+  compact?: boolean;
+}
+
+export function UserPointsDetail({ userId, compact = false }: UserPointsDetailProps) {
   const [data, setData] = useState<UserScoresData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FilterTab>("all");
+  const isOwnProfile = userId == null;
+  const predictionLabel = isOwnProfile ? "Tu predicción" : "Predicción";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api<UserScoresData>("/predictions/me/scores");
+      const path =
+        userId != null ? `/leaderboard/${userId}/scores` : "/predictions/me/scores";
+      const res = await api<UserScoresData>(path);
       setData(res);
     } catch {
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -156,24 +173,26 @@ export function UserPointsDetail() {
 
   return (
     <div className="user-points-detail">
-      <div className="stats-row">
-        <div className="stat-box">
-          <div className="label">Total acumulado</div>
-          <div className="value">{loading ? "…" : data?.totalPoints ?? 0}</div>
+      {!compact && (
+        <div className="stats-row">
+          <div className="stat-box">
+            <div className="label">Total acumulado</div>
+            <div className="value">{loading ? "…" : data?.totalPoints ?? 0}</div>
+          </div>
+          <div className="stat-box">
+            <div className="label">Por partidos</div>
+            <div className="value">{loading ? "…" : data?.matchPointsTotal ?? 0}</div>
+          </div>
+          <div className="stat-box">
+            <div className="label">Clasificados, cuadro y bonos</div>
+            <div className="value">{loading ? "…" : data?.extrasPointsTotal ?? 0}</div>
+          </div>
+          <div className="stat-box">
+            <div className="label">Partidos puntuados</div>
+            <div className="value">{loading ? "…" : data?.matches.length ?? 0}</div>
+          </div>
         </div>
-        <div className="stat-box">
-          <div className="label">Por partidos</div>
-          <div className="value">{loading ? "…" : data?.matchPointsTotal ?? 0}</div>
-        </div>
-        <div className="stat-box">
-          <div className="label">Clasificados, cuadro y bonos</div>
-          <div className="value">{loading ? "…" : data?.extrasPointsTotal ?? 0}</div>
-        </div>
-        <div className="stat-box">
-          <div className="label">Partidos puntuados</div>
-          <div className="value">{loading ? "…" : data?.matches.length ?? 0}</div>
-        </div>
-      </div>
+      )}
 
       <div className="user-points-tabs" role="tablist">
         {(
@@ -198,17 +217,21 @@ export function UserPointsDetail() {
 
       {loading && (
         <div className="panel-card empty-state">
-          <strong>Cargando tus puntos…</strong>
+          <strong>{isOwnProfile ? "Cargando tus puntos…" : "Cargando puntos…"}</strong>
         </div>
       )}
 
       {!loading && !hasContent && (
         <div className="panel-card empty-state">
-          <strong>Aún no tienes puntos registrados</strong>
-          <p style={{ marginTop: "0.5rem" }}>
-            Haz predicciones en <Link to="/predictions">Partidos</Link> y, cuando el admin publique resultados,
-            verás aquí el detalle de cada partido y cada categoría.
-          </p>
+          <strong>
+            {isOwnProfile ? "Aún no tienes puntos registrados" : "Sin puntos registrados aún"}
+          </strong>
+          {isOwnProfile && (
+            <p style={{ marginTop: "0.5rem" }}>
+              Haz predicciones en <Link to="/predictions">Partidos</Link> y, cuando el admin publique resultados,
+              verás aquí el detalle de cada partido y cada categoría.
+            </p>
+          )}
         </div>
       )}
 
@@ -219,7 +242,11 @@ export function UserPointsDetail() {
               {tab === "all" && <h2 className="user-points-section-title">Partidos</h2>}
               <div className="user-points-list">
                 {filteredMatches.map((m) => (
-                  <MatchPointsCard key={m.matchId} match={m} />
+                  <MatchPointsCard
+                    key={m.matchId}
+                    match={m}
+                    predictionLabel={predictionLabel}
+                  />
                 ))}
               </div>
             </section>
@@ -247,11 +274,13 @@ export function UserPointsDetail() {
           {tab === "extras" && filteredExtras.length === 0 && (
             <div className="panel-card empty-state">
               <strong>Sin puntos de clasificados, cuadro o bonos</strong>
-              <p style={{ marginTop: "0.5rem" }}>
-                Completa el <Link to="/predictions/qualifiers">cuadro de 32</Link>,{" "}
-                <Link to="/predictions/bracket">eliminatorias</Link> (cuadro de premios) y{" "}
-                <Link to="/predictions/extras">goleador y asistidor</Link>.
-              </p>
+              {isOwnProfile && (
+                <p style={{ marginTop: "0.5rem" }}>
+                  Completa el <Link to="/predictions/qualifiers">cuadro de 32</Link>,{" "}
+                  <Link to="/predictions/bracket">eliminatorias</Link> (cuadro de premios) y{" "}
+                  <Link to="/predictions/extras">goleador y asistidor</Link>.
+                </p>
+              )}
             </div>
           )}
         </>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { PageTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { BestThirdsPanel } from "../components/BestThirdsPanel";
 import { BracketTreeView, type BracketTreeMatch } from "../components/BracketTreeView";
@@ -57,12 +58,18 @@ export function R16BracketPage() {
 
   return (
     <>
-      <h1 className="page-title">Dieciseisavos de final</h1>
-      <p className="page-subtitle">
-        Cuadro <strong>oficial</strong> FIFA (partidos 73–88). Lo publica el administrador según los resultados reales
-        de grupos. Tus predicciones de marcador en esta fase van en{" "}
-        <Link to="/predictions/bracket">Eliminatorias</Link>.
-      </p>
+      <PageTitle
+        helpTitle="Dieciseisavos de final"
+        help={
+          <p>
+            Cuadro <strong>oficial</strong> FIFA (partidos 73–88). Lo publica el administrador según los resultados
+            reales de grupos. Tus predicciones de marcador en esta fase van en{" "}
+            <Link to="/predictions/bracket">Eliminatorias</Link>.
+          </p>
+        }
+      >
+        Dieciseisavos de final
+      </PageTitle>
 
       <PredictionsSubnav />
 

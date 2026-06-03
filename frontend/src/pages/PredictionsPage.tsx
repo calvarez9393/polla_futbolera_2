@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DateNavigator } from "../components/DateNavigator";
+import { PageTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import {
   PredictionMatchCard,
@@ -111,10 +112,17 @@ export function PredictionsPage() {
 
   return (
     <>
-      <h1 className="page-title">Calendario y predicciones</h1>
-      <p className="page-subtitle">
-        Todos los partidos del Mundial por día. {token ? "Registra tu marcador y revisa tus puntos." : "Inicia sesión para predecir."}
-      </p>
+      <PageTitle
+        helpTitle="Calendario y predicciones"
+        help={
+          <p>
+            Todos los partidos del Mundial por día.{" "}
+            {token ? "Registra tu marcador y revisa tus puntos." : "Inicia sesión para predecir."}
+          </p>
+        }
+      >
+        Calendario y predicciones
+      </PageTitle>
 
       {!token && (
         <div className="panel-card" style={{ marginBottom: "1rem", padding: "1rem 1.25rem" }}>

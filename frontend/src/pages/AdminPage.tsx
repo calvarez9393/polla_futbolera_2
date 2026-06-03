@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AdminSubnav } from "../components/AdminSubnav";
+import { PageTitle, SectionTitle } from "../components/InfoModal";
 import { api } from "../lib/api";
 import { formatCalendarDateYmd } from "../lib/matchTime";
 import {
@@ -116,23 +117,32 @@ export function AdminPage() {
   return (
     <>
       <AdminSubnav />
-      <h1 className="page-title">Panel Admin</h1>
-      <p className="page-subtitle">Reglamento oficial Polla 2026 — dos fases, tabla general acumulada.</p>
+      <PageTitle
+        helpTitle="Panel Admin"
+        help={<p>Reglamento oficial Polla 2026 — dos fases, tabla general acumulada.</p>}
+      >
+        Panel Admin
+      </PageTitle>
 
       {message && <div className={`alert ${isError ? "alert-error" : "alert-success"}`}>{message}</div>}
 
       <section className="panel-card" style={{ marginBottom: "1.25rem" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>Reglamento resumido</h2>
-        <ul className="admin-block-hint" style={{ paddingLeft: "1.1rem", lineHeight: 1.6 }}>
-          <li>
-            <strong>Fase 1</strong> (grupos + 16avos): ganador/empate +3, dif. +2, exacto +5; 24 clasificados × 4 pts.
-          </li>
-          <li>
-            <strong>Fase 2</strong> (octavos→final): puntos por avanzar y exacto según ronda; cuadro completo y premios
-            especiales.
-          </li>
-          <li>Inscripción $50.000 COP; premios 60% / 25% / 15% (20 participantes).</li>
-        </ul>
+        <SectionTitle
+          title="Reglamento resumido"
+          help={
+            <ul style={{ paddingLeft: "1.1rem", lineHeight: 1.6 }}>
+              <li>
+                <strong>Fase 1</strong> (grupos + 16avos): ganador/empate +3, dif. +2, exacto +5; 24 clasificados × 4
+                pts.
+              </li>
+              <li>
+                <strong>Fase 2</strong> (octavos→final): puntos por avanzar y exacto según ronda; cuadro completo y
+                premios especiales.
+              </li>
+              <li>Inscripción $50.000 COP; premios 60% / 25% / 15% (20 participantes).</li>
+            </ul>
+          }
+        />
       </section>
 
       <section className="panel-card" style={{ marginBottom: "1.25rem" }}>
@@ -152,37 +162,47 @@ export function AdminPage() {
 
       <div className="admin-grid">
         <section className="panel-card">
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.75rem" }}>Fase de grupos</h2>
-          <p className="admin-block-hint">72 partidos · 48 equipos · 12 grupos (11–27 jun 2026).</p>
+          <SectionTitle
+            title="Fase de grupos"
+            help={<p>72 partidos · 48 equipos · 12 grupos (11–27 jun 2026).</p>}
+          />
           <button type="button" className="btn btn-primary btn-block" onClick={importSchedule} disabled={importing}>
             {importing ? "Importando…" : "Importar grupos 2026"}
           </button>
         </section>
 
         <section className="panel-card">
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.75rem" }}>Eliminatorias</h2>
-          <p className="admin-block-hint">
-            16 dieciseisavos + octavos + cuartos + semis + final + 3er puesto.
-          </p>
+          <SectionTitle
+            title="Eliminatorias"
+            help={<p>16 dieciseisavos + octavos + cuartos + semis + final + 3er puesto.</p>}
+          />
           <button type="button" className="btn btn-primary btn-block" onClick={importKnockout} disabled={importingKo}>
             {importingKo ? "Importando…" : "Importar cuadro eliminatorio"}
           </button>
         </section>
 
         <section className="panel-card">
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>Cierre de predicciones</h2>
-          {(settings.knockoutPredictionsOpenDate || settings.knockoutPredictionsCloseDate) && (
-            <p className="admin-block-hint" style={{ marginTop: 0, marginBottom: "1rem" }}>
-              Ventana activa en el sistema:{" "}
-              {settings.knockoutPredictionsOpenDate
-                ? formatCalendarDateYmd(settings.knockoutPredictionsOpenDate)
-                : "sin apertura"}
-              {settings.knockoutPredictionsCloseDate
-                ? ` – ${formatCalendarDateYmd(settings.knockoutPredictionsCloseDate)}`
-                : ""}
-              . Las eliminatorias usan estas fechas (no el calendario FIFA por ronda).
-            </p>
-          )}
+          <SectionTitle
+            title="Cierre de predicciones"
+            help={
+              <>
+                <p>
+                  Ventana activa:{" "}
+                  {settings.knockoutPredictionsOpenDate
+                    ? formatCalendarDateYmd(settings.knockoutPredictionsOpenDate)
+                    : "sin apertura"}
+                  {settings.knockoutPredictionsCloseDate
+                    ? ` – ${formatCalendarDateYmd(settings.knockoutPredictionsCloseDate)}`
+                    : ""}
+                  . Las eliminatorias usan estas fechas (no el calendario FIFA por ronda).
+                </p>
+                <p>
+                  Si defines fecha de apertura, reemplaza el calendario FIFA. Cierre global opcional para todas las
+                  predicciones eliminatorias.
+                </p>
+              </>
+            }
+          />
           <form onSubmit={onSaveSettings}>
             <div className="field">
               <label className="rule-field-label">Nombre del torneo</label>
@@ -242,10 +262,10 @@ export function AdminPage() {
       </div>
 
       <section className="panel-card scoring-rules-panel" style={{ marginTop: "1.25rem" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>Reglas de puntos</h2>
-        <p className="admin-block-hint" style={{ marginBottom: "1.25rem" }}>
-          Valores del reglamento oficial. Cada fila indica cuántos puntos suma ese acierto.
-        </p>
+        <SectionTitle
+          title="Reglas de puntos"
+          help={<p>Valores del reglamento oficial. Cada fila indica cuántos puntos suma ese acierto.</p>}
+        />
         <form onSubmit={onSaveRules}>
           {SCORING_RULE_SECTIONS.map((section) => (
             <div key={section.title} className="scoring-rules-section">

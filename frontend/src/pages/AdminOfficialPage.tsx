@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { AdminSubnav } from "../components/AdminSubnav";
+import { InfoModal, PageTitle, SectionTitle } from "../components/InfoModal";
 import { AdminR16BracketEditor } from "../components/AdminR16BracketEditor";
 import { TeamFlag } from "../components/TeamFlag";
 import { api } from "../lib/api";
@@ -172,10 +174,12 @@ export function AdminOfficialPage() {
   return (
     <>
       <AdminSubnav />
-      <h1 className="page-title">Resultados oficiales</h1>
-      <p className="page-subtitle">
-        Define los 24 clasificados y el cuadro final. Luego calcula puntos para todos los participantes.
-      </p>
+      <PageTitle
+        helpTitle="Resultados oficiales"
+        help={<p>Define los 24 clasificados y el cuadro final. Luego calcula puntos para todos los participantes.</p>}
+      >
+        Resultados oficiales
+      </PageTitle>
 
       {message && <div className={`alert ${isError ? "alert-error" : "alert-success"}`}>{message}</div>}
 
@@ -185,19 +189,165 @@ export function AdminOfficialPage() {
         </div>
       ) : (
         <>
-          <AdminR16BracketEditor
-            onMessage={(msg, err) => {
-              setMessage(msg);
-              setIsError(err);
-            }}
-          />
+          <section className="admin-official-phase">
+            <header className="admin-official-phase-head admin-official-phase-head--ko">
+              <SectionTitle
+                title="Eliminatorias — cuadro y cruces"
+                className="admin-official-phase-title-row"
+                help={
+                  <p>
+                    Define el cuadro de dieciseisavos (cruces y mejores terceros) y los premios del campeón. Los{" "}
+                    <strong>marcadores de cada partido</strong> se cargan en{" "}
+                    <Link to="/admin/calendar">Calendario y resultados → Eliminatorias</Link>.
+                  </p>
+                }
+              />
+            </header>
+
+            <AdminR16BracketEditor
+              onMessage={(msg, err) => {
+                setMessage(msg);
+                setIsError(err);
+              }}
+            />
+
+            <form className="panel-card" onSubmit={saveBonuses} style={{ marginBottom: "1.25rem" }}>
+              <h3 style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}>Campeón, final y premios especiales</h3>
+              <div className="field">
+                <label>Campeón</label>
+                <select
+                  className="select"
+                  value={bonuses.championTeamId ?? ""}
+                  onChange={(e) =>
+                    setBonuses((b) => ({ ...b, championTeamId: e.target.value ? Number(e.target.value) : null }))
+                  }
+                >
+                  <option value="">—</option>
+                  {allTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Subcampeón</label>
+                <select
+                  className="select"
+                  value={bonuses.runnerUpTeamId ?? ""}
+                  onChange={(e) =>
+                    setBonuses((b) => ({ ...b, runnerUpTeamId: e.target.value ? Number(e.target.value) : null }))
+                  }
+                >
+                  <option value="">—</option>
+                  {allTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Tercer puesto</label>
+                <select
+                  className="select"
+                  value={bonuses.thirdPlaceTeamId ?? ""}
+                  onChange={(e) =>
+                    setBonuses((b) => ({ ...b, thirdPlaceTeamId: e.target.value ? Number(e.target.value) : null }))
+                  }
+                >
+                  <option value="">—</option>
+                  {allTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="admin-block-hint">Semifinalistas (4)</p>
+              <div className="qualifier-grid">
+                {allTeams.map((t) => (
+                  <button
+                    key={`s-${t.id}`}
+                    type="button"
+                    className={`qualifier-chip${bonuses.semifinalistTeamIds?.includes(t.id) ? " qualifier-chip--on" : ""}`}
+                    onClick={() => toggleSemi(t.id)}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+              <p className="admin-block-hint" style={{ marginTop: "0.75rem" }}>
+                Finalistas (2)
+              </p>
+              <div className="qualifier-grid">
+                {allTeams.map((t) => (
+                  <button
+                    key={`f-${t.id}`}
+                    type="button"
+                    className={`qualifier-chip${bonuses.finalistTeamIds?.includes(t.id) ? " qualifier-chip--on" : ""}`}
+                    onClick={() => toggleFinal(t.id)}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+              <div className="field" style={{ marginTop: "1rem" }}>
+                <label>Goleador del mundial</label>
+                <input
+                  className="input"
+                  value={bonuses.topScorer ?? ""}
+                  onChange={(e) => setBonuses((b) => ({ ...b, topScorer: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>Máximo asistidor</label>
+                <input
+                  className="input"
+                  value={bonuses.topAssister ?? ""}
+                  onChange={(e) => setBonuses((b) => ({ ...b, topAssister: e.target.value }))}
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ marginTop: "0.75rem" }}>
+                Guardar cuadro oficial
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ marginLeft: "0.5rem" }}
+                onClick={() => runCalc("Cuadro", "/admin/scoring/calculate-bonuses")}
+              >
+                Calcular puntos cuadro/premios
+              </button>
+            </form>
+          </section>
+
+          <section className="admin-official-phase">
+            <header className="admin-official-phase-head">
+              <SectionTitle
+                title="Fase de grupos — clasificados"
+                className="admin-official-phase-title-row"
+                help={
+                  <p>
+                    Los 24 equipos que pasan a eliminatorias según resultados reales de la fase de grupos. Los
+                    marcadores de cada partido se cargan en{" "}
+                    <Link to="/admin/calendar">Calendario y resultados → Fase de grupos</Link>.
+                  </p>
+                }
+              />
+            </header>
 
           <form className="panel-card" onSubmit={saveQualifiers} style={{ marginBottom: "1.25rem" }}>
-            <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>24 clasificados oficiales</h2>
-            <p className="admin-block-hint">
-              Los 24 oficiales son el top 2 de cada grupo según resultados reales finalizados. Puedes calcularlos
-              automáticamente o ajustar manualmente si hace falta.
-            </p>
+            <SectionTitle
+              as="h3"
+              title="24 clasificados oficiales"
+              help={
+                <p>
+                  Los 24 oficiales son el top 2 de cada grupo según resultados reales finalizados. Puedes calcularlos
+                  automáticamente o ajustar manualmente si hace falta.
+                </p>
+              }
+            />
             <div className="admin-qualifiers-toolbar">
               <button
                 type="button"
@@ -345,118 +495,8 @@ export function AdminOfficialPage() {
             </button>
           </form>
 
-          <form className="panel-card" onSubmit={saveBonuses} style={{ marginBottom: "1.25rem" }}>
-            <h2 style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}>Cuadro y premios especiales</h2>
-            <div className="field">
-              <label>Campeón</label>
-              <select
-                className="select"
-                value={bonuses.championTeamId ?? ""}
-                onChange={(e) =>
-                  setBonuses((b) => ({ ...b, championTeamId: e.target.value ? Number(e.target.value) : null }))
-                }
-              >
-                <option value="">—</option>
-                {allTeams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Subcampeón</label>
-              <select
-                className="select"
-                value={bonuses.runnerUpTeamId ?? ""}
-                onChange={(e) =>
-                  setBonuses((b) => ({ ...b, runnerUpTeamId: e.target.value ? Number(e.target.value) : null }))
-                }
-              >
-                <option value="">—</option>
-                {allTeams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Tercer puesto</label>
-              <select
-                className="select"
-                value={bonuses.thirdPlaceTeamId ?? ""}
-                onChange={(e) =>
-                  setBonuses((b) => ({ ...b, thirdPlaceTeamId: e.target.value ? Number(e.target.value) : null }))
-                }
-              >
-                <option value="">—</option>
-                {allTeams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="admin-block-hint">Semifinalistas (4)</p>
-            <div className="qualifier-grid">
-              {allTeams.map((t) => (
-                <button
-                  key={`s-${t.id}`}
-                  type="button"
-                  className={`qualifier-chip${bonuses.semifinalistTeamIds?.includes(t.id) ? " qualifier-chip--on" : ""}`}
-                  onClick={() => toggleSemi(t.id)}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-            <p className="admin-block-hint" style={{ marginTop: "0.75rem" }}>
-              Finalistas (2)
-            </p>
-            <div className="qualifier-grid">
-              {allTeams.map((t) => (
-                <button
-                  key={`f-${t.id}`}
-                  type="button"
-                  className={`qualifier-chip${bonuses.finalistTeamIds?.includes(t.id) ? " qualifier-chip--on" : ""}`}
-                  onClick={() => toggleFinal(t.id)}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-            <div className="field" style={{ marginTop: "1rem" }}>
-              <label>Goleador del mundial</label>
-              <input
-                className="input"
-                value={bonuses.topScorer ?? ""}
-                onChange={(e) => setBonuses((b) => ({ ...b, topScorer: e.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label>Máximo asistidor</label>
-              <input
-                className="input"
-                value={bonuses.topAssister ?? ""}
-                onChange={(e) => setBonuses((b) => ({ ...b, topAssister: e.target.value }))}
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ marginTop: "0.75rem" }}>
-              Guardar cuadro oficial
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ marginLeft: "0.5rem" }}
-              onClick={() => runCalc("Cuadro", "/admin/scoring/calculate-bonuses")}
-            >
-              Calcular puntos cuadro/premios
-            </button>
-          </form>
-
           <section className="panel-card">
-            <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Bonos Fase 1</h2>
+            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Bonos Fase 1 (grupos)</h3>
             <p className="admin-block-hint">
               <strong>Experto del día</strong> (+10): por cada jornada con todos los partidos de Fase 1 finalizados
               (grupos + dieciseisavos), si un usuario acertó el 1X2 en todos ese día. No depende de los 24
@@ -485,6 +525,7 @@ export function AdminOfficialPage() {
                 Calcular invicto y maestro de grupo
               </button>
             </div>
+          </section>
           </section>
         </>
       )}

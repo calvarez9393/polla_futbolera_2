@@ -169,7 +169,7 @@ export function resolveKnockoutBracketTeams(
       }
     }
 
-    resolved.set(num, { homeTeamId, awayTeamId });
+    resolved.set(num, { homeTeamId: Number(homeTeamId), awayTeamId: Number(awayTeamId) });
   }
 
   return resolved;

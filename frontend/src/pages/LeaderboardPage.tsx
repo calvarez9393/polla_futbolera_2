@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { getUser } from "../lib/auth";
+import { Modal } from "../components/Modal";
+import { PageTitle } from "../components/InfoModal";
+import { UserPointsDetail } from "../components/UserPointsDetail";
 
 interface LeaderRow {
   user_id: number;
@@ -8,10 +11,11 @@ interface LeaderRow {
   display_name?: string | null;
   amount_paid?: number;
   total_points: number;
-  exact_scores: number;
-  qualified_correct: number;
-  knockout_advancing: number;
-  late_stage_points: number;
+}
+
+interface ViewPlayer {
+  userId: number;
+  name: string;
 }
 
 const fmt = new Intl.NumberFormat("es-CO", {
@@ -20,9 +24,22 @@ const fmt = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0
 });
 
+function playerName(row: LeaderRow): string {
+  const name = row.display_name?.trim();
+  return name || row.email;
+}
+
+function rankClass(index: number): string {
+  if (index === 0) return " leaderboard-rank--gold";
+  if (index === 1) return " leaderboard-rank--silver";
+  if (index === 2) return " leaderboard-rank--bronze";
+  return "";
+}
+
 export function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewPlayer, setViewPlayer] = useState<ViewPlayer | null>(null);
   const me = getUser();
 
   useEffect(() => {
@@ -40,37 +57,70 @@ export function LeaderboardPage() {
 
   return (
     <>
-      <h1 className="page-title">Ranking</h1>
-      <p className="page-subtitle">
-        Tabla general acumulada. En empate: marcadores exactos → clasificados → equipos en fases finales →
-        puntos en semis/final.
-      </p>
+      <PageTitle helpTitle="Cómo funciona el ranking" help={
+        <>
+          <p>
+            Tabla general por puntos acumulados. En empate se desempata por: marcadores exactos, clasificados
+            acertados, equipos que avanzaron en eliminatorias y puntos en semifinal y final.
+          </p>
+          <p>
+            Pulsa <strong>Ver</strong> en cualquier jugador para ver partido a partido cómo sumó sus puntos.
+          </p>
+        </>
+      }>
+        Ranking
+      </PageTitle>
 
       {!loading && premio > 0 && (
-        <div className="prize-pool-banner">
-          <div className="prize-pool-item prize-pool-item--highlight">
-            <span className="prize-pool-label">Bote (70%)</span>
-            <span className="prize-pool-value">{fmt.format(premio)}</span>
+        <section className="prize-pool" aria-label="Premios del torneo">
+          <article className="prize-card prize-card--pool">
+            <div className="prize-card-icon prize-card-icon--pool" aria-hidden>
+              <span>🏆</span>
+            </div>
+            <div className="prize-card-content">
+              <p className="prize-card-eyebrow">Bote a repartir</p>
+              <p className="prize-card-amount prize-card-amount--pool">{fmt.format(premio)}</p>
+            </div>
+          </article>
+
+          <div className="prize-podium">
+            <article className="prize-card prize-card--place prize-card--gold">
+              <div className="prize-card-icon prize-card-icon--gold" aria-hidden>
+                <span>1</span>
+              </div>
+              <div className="prize-card-content">
+                <p className="prize-card-eyebrow">Primer lugar</p>
+                <p className="prize-card-amount">{fmt.format(primero)}</p>
+                <span className="prize-card-chip">50% del bote</span>
+              </div>
+            </article>
+
+            <article className="prize-card prize-card--place prize-card--silver">
+              <div className="prize-card-icon prize-card-icon--silver" aria-hidden>
+                <span>2</span>
+              </div>
+              <div className="prize-card-content">
+                <p className="prize-card-eyebrow">Segundo lugar</p>
+                <p className="prize-card-amount">{fmt.format(segundo)}</p>
+                <span className="prize-card-chip">30% del bote</span>
+              </div>
+            </article>
+
+            <article className="prize-card prize-card--place prize-card--bronze">
+              <div className="prize-card-icon prize-card-icon--bronze" aria-hidden>
+                <span>3</span>
+              </div>
+              <div className="prize-card-content">
+                <p className="prize-card-eyebrow">Tercer lugar</p>
+                <p className="prize-card-amount">{fmt.format(tercero)}</p>
+                <span className="prize-card-chip">20% del bote</span>
+              </div>
+            </article>
           </div>
-          <div className="prize-pool-divider" />
-          <div className="prize-pool-item">
-            <span className="prize-pool-label">1° lugar (50%)</span>
-            <span className="prize-pool-value prize-pool-value--gold">{fmt.format(primero)}</span>
-          </div>
-          <div className="prize-pool-divider" />
-          <div className="prize-pool-item">
-            <span className="prize-pool-label">2° lugar (30%)</span>
-            <span className="prize-pool-value prize-pool-value--silver">{fmt.format(segundo)}</span>
-          </div>
-          <div className="prize-pool-divider" />
-          <div className="prize-pool-item">
-            <span className="prize-pool-label">3° lugar (20%)</span>
-            <span className="prize-pool-value prize-pool-value--bronze">{fmt.format(tercero)}</span>
-          </div>
-        </div>
+        </section>
       )}
 
-      <div className="panel-card">
+      <div className="panel-card leaderboard-panel">
         {loading ? (
           <div className="empty-state">
             <strong>Cargando…</strong>
@@ -80,49 +130,43 @@ export function LeaderboardPage() {
             <strong>Sin puntuaciones aún</strong>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Pos</th>
-                  <th>Jugador</th>
-                  <th>Pts</th>
-                  <th title="Desempate 1">Exactos</th>
-                  <th title="Desempate 2">Clasif.</th>
-                  <th title="Desempate 3">KO</th>
-                  <th title="Desempate 4">Semis+Final</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={row.user_id}>
-                    <td>
-                      <span className={`rank-pill${index < 3 ? " top" : ""}`}>{index + 1}</span>
-                    </td>
-                    <td>
-                      {row.display_name || row.email}
-                      {Number(row.user_id) === me?.id && (
-                        <span className="badge badge-finished" style={{ marginLeft: 8 }}>
-                          Tú
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <strong style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem" }}>
-                        {row.total_points}
-                      </strong>
-                    </td>
-                    <td>{row.exact_scores}</td>
-                    <td>{row.qualified_correct}</td>
-                    <td>{row.knockout_advancing}</td>
-                    <td>{row.late_stage_points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ol className="leaderboard-list">
+            {rows.map((row, index) => {
+              const name = playerName(row);
+              const isMe = Number(row.user_id) === me?.id;
+              return (
+                <li
+                  key={row.user_id}
+                  className={`leaderboard-row${isMe ? " leaderboard-row--me" : ""}`}
+                >
+                  <span className={`leaderboard-rank${rankClass(index)}`}>{index + 1}</span>
+                  <span className="leaderboard-name">
+                    {name}
+                    {isMe && <span className="leaderboard-you">Tú</span>}
+                  </span>
+                  <span className="leaderboard-points">{row.total_points}</span>
+                  <button
+                    type="button"
+                    className="btn-ghost leaderboard-view-btn"
+                    onClick={() => setViewPlayer({ userId: row.user_id, name })}
+                  >
+                    Ver
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
         )}
       </div>
+
+      <Modal
+        title={viewPlayer ? `Puntos de ${viewPlayer.name}` : ""}
+        open={viewPlayer != null}
+        onClose={() => setViewPlayer(null)}
+        wide
+      >
+        {viewPlayer && <UserPointsDetail userId={viewPlayer.userId} compact />}
+      </Modal>
     </>
   );
 }

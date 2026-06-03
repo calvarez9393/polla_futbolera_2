@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { InfoModal, PageTitle, SectionTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { PointsChips } from "../components/PointsChips";
 import { TeamFlag } from "../components/TeamFlag";
@@ -46,24 +47,31 @@ export function ExtrasPage() {
   const load = useCallback(async () => {
     const res = await api<{
       teams: Team[];
-      picks: BonusPicks | null;
+      picks: BonusPicks;
       earnedPoints: number | null;
       earnedBreakdown: Record<string, number> | null;
     }>("/predictions/me/bonuses");
     setTeams(res.teams);
-    if (res.picks) {
-      setPicks({
-        ...res.picks,
-        topScorer: res.picks.topScorer ?? "",
-        topAssister: res.picks.topAssister ?? ""
-      });
-    }
+    setPicks({
+      championTeamId: res.picks.championTeamId ?? null,
+      runnerUpTeamId: res.picks.runnerUpTeamId ?? null,
+      thirdPlaceTeamId: res.picks.thirdPlaceTeamId ?? null,
+      semifinalistTeamIds: res.picks.semifinalistTeamIds ?? [],
+      finalistTeamIds: res.picks.finalistTeamIds ?? [],
+      topScorer: res.picks.topScorer ?? "",
+      topAssister: res.picks.topAssister ?? ""
+    });
     setEarnedPoints(res.earnedPoints);
     setEarnedBreakdown(res.earnedBreakdown);
   }, []);
 
   useEffect(() => {
     load().catch(() => undefined);
+    const refresh = () => {
+      if (document.visibilityState === "visible") load().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
   }, [load]);
 
   async function onSubmit(e: FormEvent) {
@@ -87,13 +95,18 @@ export function ExtrasPage() {
 
   return (
     <>
-      <h1 className="page-title">Cuadro y premios — Fase 2</h1>
-      <p className="page-subtitle">
-        El <strong>cuadro</strong> (semifinalistas, finalistas, campeón, subcampeón y tercero) se arma solo con los
-        resultados que guardas en{" "}
-        <Link to="/predictions/bracket">Eliminatorias</Link> desde octavos hasta la final. Aquí solo indicas goleador y
-        máximo asistidor.
-      </p>
+      <PageTitle
+        helpTitle="Cuadro y premios — Fase 2"
+        help={
+          <p>
+            El <strong>cuadro</strong> (semifinalistas, finalistas, campeón, subcampeón y tercero) se arma solo con los
+            resultados que guardas en <Link to="/predictions/bracket">Eliminatorias</Link> desde octavos hasta la final.
+            Aquí solo indicas goleador y máximo asistidor.
+          </p>
+        }
+      >
+        Cuadro y premios — Fase 2
+      </PageTitle>
 
       <PredictionsSubnav />
 
@@ -104,11 +117,15 @@ export function ExtrasPage() {
       )}
 
       <section className="panel-card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Tu cuadro (desde Eliminatorias)</h2>
-        <p className="admin-block-hint" style={{ marginBottom: "1rem" }}>
-          Completa o actualiza predicciones en{" "}
-          <Link to="/predictions/bracket">Eliminatorias</Link> y vuelve aquí para ver el resumen.
-        </p>
+        <SectionTitle
+          title="Tu cuadro (desde Eliminatorias)"
+          help={
+            <p>
+              Completa o actualiza predicciones en <Link to="/predictions/bracket">Eliminatorias</Link> y vuelve aquí
+              para ver el resumen.
+            </p>
+          }
+        />
 
         <dl className="bonus-derived-list">
           <div>

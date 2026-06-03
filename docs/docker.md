@@ -29,6 +29,20 @@
 
 En dev, los cambios en `backend/src` y `frontend/src` se recargan solos (sin reconstruir imagen).
 
+## Pruebas en la red local (varios dispositivos)
+
+1. Obtén la IP de tu PC en la Wi‑Fi: `hostname -I` (la primera suele ser `192.168.x.x`).
+2. En `.env`, añade esa IP a CORS y (opcional) HMR:
+   ```env
+   CORS_ORIGIN=http://localhost:5173,http://192.168.1.50:5173
+   VITE_HMR_HOST=192.168.1.50
+   ```
+3. Reinicia: `docker compose up --build`
+4. Comparte con los testers: **http://192.168.1.50:5173** (no uses `localhost` en el celular de otro).
+5. Misma red Wi‑Fi; si no carga, abre el firewall: `sudo ufw allow 5173/tcp` (y `4000` si acceden directo a la API).
+
+Con Docker dev, `VITE_API_URL=/api` hace que el navegador llame a la API por el mismo host (tu IP:5173), así que no hace falta exponer el puerto 4000 a los testers.
+
 ## Hot reload
 
 - **Backend:** `tsx watch src/server.ts` reinicia la API al guardar archivos `.ts`.

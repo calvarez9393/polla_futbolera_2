@@ -82,7 +82,7 @@ export async function loadKnockoutRowsForTournament(tournamentId: number): Promi
     ORDER BY starts_at ASC`,
     [tournamentId]
   );
-  return result.rows as KnockoutMatchRow[];
+  return result.rows.map((row) => toKnockoutMatchRow(row as Record<string, unknown>));
 }
 
 export async function loadPredictionsMap(
@@ -118,7 +118,7 @@ function toKnockoutMatchRow(r: Record<string, unknown>): KnockoutMatchRow {
     away_team_id: Number(r.away_team_id),
     home_score: r.home_score as number | null,
     away_score: r.away_score as number | null,
-    winner_team_id: r.winner_team_id as number | null
+    winner_team_id: r.winner_team_id != null ? Number(r.winner_team_id) : null
   };
 }
 
@@ -231,7 +231,7 @@ export async function enrichKnockoutAdvancingOnRows(
     away_team_id: Number(r.away_team_id),
     home_score: r.home_score as number | null,
     away_score: r.away_score as number | null,
-    winner_team_id: r.winner_team_id as number | null
+    winner_team_id: r.winner_team_id != null ? Number(r.winner_team_id) : null
   }));
 
   const preds =

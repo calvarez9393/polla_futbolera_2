@@ -53,6 +53,6 @@ Atajo: `npm run dev:docker`
 
 - Backend tests: `npm --workspace backend test`
 - Build: `npm run build`
-- **Carga demo (100 usuarios + predicciones J1–J3, sin resultados):** `npm --workspace backend run seed:demo-round1`  
-  Login: `demo001@polla.local` … / `pollademo` — tú cargas resultados en Admin.  
+- **Carga demo (5 usuarios + predicciones J1–J3, sin resultados):** `npm --workspace backend run seed:demo-round1`  
+  Login numérico: `900001` … `900005` / `pollademo` — tú cargas resultados en Admin.  
   `--matchday 1` solo una jornada; `--finalize` opcional para puntuar automático.

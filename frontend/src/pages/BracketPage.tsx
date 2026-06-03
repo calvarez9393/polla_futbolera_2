@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { PageTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { PredictionMatchCard, type CalendarPredictionMatch } from "../components/PredictionMatchCard";
 import { api } from "../lib/api";
@@ -56,30 +57,44 @@ export function BracketPage() {
     return () => document.removeEventListener("visibilitychange", refresh);
   }, [load]);
 
+  async function onMatchSaved() {
+    await load();
+    try {
+      await api("/predictions/me/bonuses");
+    } catch {
+      /* resumen en Cuadro y premios se actualiza al abrir esa página */
+    }
+  }
+
   return (
     <>
-      <h1 className="page-title">Eliminatorias</h1>
-      <p className="page-subtitle">
-        <strong>Fase 1:</strong> grupos y dieciseisavos — ganador/empate (+3), diferencia (+2), exacto (+5). En
-        fase de grupos puedes predecir empate sin elegir ganador. Desde octavos, en empate debes indicar quién
-        pasa en penales.{" "}
-        <strong>Fase 2:</strong> desde octavos — equipo que avanza y marcador exacto con más puntos por ronda.
-        Al guardar un resultado o elegir quién avanza, los equipos pasan solos a octavos, cuartos, semis y
-        final en tu simulación; el cuadro oficial hace lo mismo con los resultados reales del admin. Las
-        fechas de predicción las define el administrador en Configuración (o el calendario FIFA si no hay
-        fechas configuradas).
-      </p>
+      <PageTitle
+        helpTitle="Eliminatorias"
+        help={
+          <>
+            <p>
+              <strong>Fase 1:</strong> grupos y dieciseisavos — ganador/empate (+3), diferencia (+2), exacto (+5).
+              En fase de grupos puedes predecir empate sin elegir ganador. Desde octavos, en empate debes indicar
+              quién pasa en penales.
+            </p>
+            <p>
+              <strong>Fase 2:</strong> desde octavos — equipo que avanza y marcador exacto con más puntos por ronda.
+              Al guardar, los equipos pasan solos a octavos, cuartos, semis y final en tu simulación.
+            </p>
+            <p>Las fechas de predicción las define el administrador en Configuración (o el calendario FIFA).</p>
+          </>
+        }
+      >
+        Eliminatorias
+      </PageTitle>
 
       <PredictionsSubnav />
 
       {(globalWindow?.openDate || globalWindow?.closeDate) && (
-        <p className="admin-block-hint" style={{ marginBottom: "1rem" }}>
-          Ventana admin:{" "}
+        <p className="admin-ko-callout-stats" style={{ marginBottom: "1rem" }}>
+          Ventana:{" "}
           {globalWindow.openDate ? formatCalendarDateYmd(globalWindow.openDate) : "—"}
-          {globalWindow.closeDate
-            ? ` – ${formatCalendarDateYmd(globalWindow.closeDate)}`
-            : ""}{" "}
-          (calendario sede).
+          {globalWindow.closeDate ? ` – ${formatCalendarDateYmd(globalWindow.closeDate)}` : ""}
         </p>
       )}
 
@@ -134,7 +149,7 @@ export function BracketPage() {
           )}
           <div className="match-grid">
             {round.matches.map((match) => (
-              <PredictionMatchCard key={match.id} match={match} onSaved={load} />
+              <PredictionMatchCard key={match.id} match={match} onSaved={onMatchSaved} />
             ))}
           </div>
         </section>

@@ -4,10 +4,11 @@
  * Uso:
  *   npm run seed:demo-round1
  *   npm run seed:demo-round1 -- --clean   (borra puntos, resultados y todas las predicciones)
+ *   npm run seed:demo-round1 -- --users 5           (por defecto: 5)
  *   npm run seed:demo-round1 -- --matchday 2        (solo una jornada)
  *   npm run seed:demo-round1 -- --finalize          (opcional: resultados + puntos)
  *
- * Login: demo001@polla.local … / contraseña: pollademo
+ * Login numérico: 900001 … 900005 / contraseña: pollademo
  */
 import bcrypt from "bcrypt";
 import { pool } from "../db/pool.js";
@@ -15,12 +16,18 @@ import { getActiveTournamentId } from "../modules/settings/service.js";
 import { setOfficialQualifiedTeams } from "../modules/scoring/qualifiers.js";
 import { setOfficialBonusResults } from "../modules/scoring/bonuses.js";
 import { finalizeMatch } from "../modules/scoring/finalize.js";
-import { syncAllUsersQualifierPredictions } from "../modules/qualifiers/fromPredictions.js";
-import { env } from "../config/env.js";
+import { syncUserQualifierPredictions } from "../modules/qualifiers/fromPredictions.js";
 
-const DEMO_DOMAIN = "polla.local";
+/** Códigos demo: 900001, 900002, … */
+const DEMO_LOGIN_BASE = 900_000;
+const DEMO_LOGIN_PATTERN = "^900[0-9]{3}$";
+const LEGACY_DEMO_EMAIL_PATTERN = "^demo[0-9]+@polla\\.local$";
 const DEFAULT_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "pollademo";
-const DEFAULT_USERS = 100;
+const DEFAULT_USERS = 5;
+
+function demoLogin(n: number): string {
+  return String(DEMO_LOGIN_BASE + n);
+}
 
 interface MatchRow {
   id: number;
@@ -72,8 +79,22 @@ function randomScorePair(): { home: number; away: number } {
 async function cleanDemoUsers(): Promise<number> {
   const result = await pool.query(
     `DELETE FROM users
-    WHERE email ~ '^demo[0-9]+@${DEMO_DOMAIN.replace(".", "\\.")}$'
-    RETURNING id`
+    WHERE email ~ $1 OR email ~ $2
+    RETURNING id`,
+    [DEMO_LOGIN_PATTERN, LEGACY_DEMO_EMAIL_PATTERN]
+  );
+  return result.rowCount ?? 0;
+}
+
+/** Elimina códigos demo sobrantes (p. ej. 900006+) de cargas anteriores. */
+async function purgeExtraDemoUsers(keepCount: number): Promise<number> {
+  const allowed = Array.from({ length: keepCount }, (_, i) => demoLogin(i + 1));
+  const result = await pool.query(
+    `DELETE FROM users
+    WHERE email ~ $1
+      AND NOT (email = ANY($2::text[]))
+    RETURNING id`,
+    [DEMO_LOGIN_PATTERN, allowed]
   );
   return result.rowCount ?? 0;
 }
@@ -152,9 +173,8 @@ async function cleanCompetitionData(tournamentId: number): Promise<{
 async function ensureUsers(count: number, passwordHash: string): Promise<number[]> {
   const ids: number[] = [];
   for (let n = 1; n <= count; n++) {
-    const num = String(n).padStart(3, "0");
-    const email = `demo${num}@${DEMO_DOMAIN}`;
-    const displayName = `Demo ${num}`;
+    const login = demoLogin(n);
+    const displayName = `Demo ${n}`;
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, role, display_name, amount_paid)
       VALUES ($1, $2, 'USER', $3, 50000)
@@ -162,21 +182,11 @@ async function ensureUsers(count: number, passwordHash: string): Promise<number[
         display_name = EXCLUDED.display_name,
         role = 'USER'
       RETURNING id`,
-      [email, passwordHash, displayName]
+      [login, passwordHash, displayName]
     );
     ids.push(result.rows[0].id as number);
   }
   return ids;
-}
-
-async function getAdminUserIds(): Promise<Array<{ id: number; email: string }>> {
-  const result = await pool.query(
-    `SELECT id, email FROM users WHERE role = 'ADMIN' ORDER BY email`
-  );
-  return result.rows.map((r) => ({
-    id: r.id as number,
-    email: r.email as string
-  }));
 }
 
 async function getGroupMatches(matchday: number | null): Promise<MatchRow[]> {
@@ -365,22 +375,20 @@ async function run(): Promise<void> {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const demoIds = await ensureUsers(users, passwordHash);
-  const admins = await getAdminUserIds();
-  if (admins.length === 0) {
-    console.warn(`⚠️  No hay usuario ADMIN en BD. Crea uno con: npm run seed (${env.ADMIN_LOGIN})`);
-  }
-  const userIds = [...new Set([...demoIds, ...admins.map((a) => a.id)])];
-
-  console.log(`Usuarios demo: ${demoIds.length} (demo001@${DEMO_DOMAIN} …)`);
-  if (admins.length > 0) {
-    console.log(`Admin(s) con predicciones: ${admins.map((a) => a.email).join(", ")}`);
+  const purged = await purgeExtraDemoUsers(users);
+  if (purged > 0) {
+    console.log(`Usuarios demo sobrantes eliminados: ${purged}`);
   }
 
-  const predCount = await seedPredictions(userIds, matches);
-  console.log(`Predicciones: ${predCount} (${userIds.length} participantes × ${matches.length} partidos)`);
+  console.log(`Usuarios demo: ${demoIds.length} (${demoLogin(1)} … ${demoLogin(users)})`);
 
-  const sync = await syncAllUsersQualifierPredictions();
-  console.log(`Clasificados simulados: ${sync.users} participantes (incluye admin)`);
+  const predCount = await seedPredictions(demoIds, matches);
+  console.log(`Predicciones: ${predCount} (${demoIds.length} usuarios × ${matches.length} partidos)`);
+
+  for (const userId of demoIds) {
+    await syncUserQualifierPredictions(userId);
+  }
+  console.log(`Clasificados simulados: ${demoIds.length} usuarios demo`);
 
   if (finalize) {
     console.log("\nModo --finalize: registrando resultados aleatorios y puntos…");
@@ -393,11 +401,11 @@ async function run(): Promise<void> {
     `SELECT COUNT(DISTINCT user_id)::int AS users, COUNT(*)::int AS predictions
     FROM predictions
     WHERE user_id = ANY($1::bigint[]) AND match_id = ANY($2::bigint[])`,
-    [userIds, matchIds]
+    [demoIds, matchIds]
   );
   const s = predStats.rows[0];
   console.log(`\nResumen: ${s.users} usuarios · ${s.predictions} predicciones · ${scopeLabel}`);
-  console.log(`Contraseña: ${password} · Ejemplo: demo001@${DEMO_DOMAIN}\n`);
+  console.log(`Contraseña: ${password} · Ejemplo login: ${demoLogin(1)}\n`);
 }
 
 run()

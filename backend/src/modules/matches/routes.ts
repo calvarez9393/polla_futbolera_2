@@ -19,21 +19,33 @@ const listSchema = z.object({
   groupId: z.coerce.number().int().positive().optional()
 });
 
-matchesRouter.get("/dates", async (_req, res, next) => {
+const datesQuerySchema = z.object({
+  stage: z.enum(["GROUP", "KNOCKOUT"]).optional()
+});
+
+matchesRouter.get("/dates", async (req, res, next) => {
   try {
+    const { stage } = datesQuerySchema.parse(req.query);
     const tournamentId = await getActiveTournamentId();
     if (!tournamentId) {
       res.json([]);
       return;
     }
     const calDate = matchCalendarDateSql("matches");
+    const stageClause = stage ? `AND stage = $2` : "";
+    const params: unknown[] = [tournamentId];
+    if (stage) params.push(stage);
     const result = await pool.query(
-      `SELECT ${calDate} AS match_date, COUNT(*)::int AS match_count
+      `SELECT
+        ${calDate} AS match_date,
+        COUNT(*)::int AS match_count,
+        COUNT(*) FILTER (WHERE status <> 'FINISHED')::int AS pending_count,
+        COUNT(*) FILTER (WHERE status = 'FINISHED')::int AS finished_count
       FROM matches
-      WHERE tournament_id = $1
+      WHERE tournament_id = $1 ${stageClause}
       GROUP BY ${calDate}
       ORDER BY match_date`,
-      [tournamentId]
+      params
     );
     res.json(result.rows);
   } catch (error) {

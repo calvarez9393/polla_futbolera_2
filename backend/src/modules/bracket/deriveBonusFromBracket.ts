@@ -21,11 +21,12 @@ export interface DerivedBracketBonusPicks {
   finalistTeamIds: number[];
 }
 
-function uniqueValidTeamIds(ids: number[], tbdId: number): number[] {
+function uniqueValidTeamIds(ids: Array<number | string>, tbdId: number): number[] {
   const seen = new Set<number>();
   const out: number[] = [];
-  for (const id of ids) {
-    if (!id || id === tbdId || seen.has(id)) continue;
+  for (const raw of ids) {
+    const id = Number(raw);
+    if (!id || Number.isNaN(id) || id === tbdId || seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }
@@ -43,36 +44,123 @@ function advancingFromPrediction(
     prediction?.predicted_home_score == null ||
     prediction?.predicted_away_score == null
   ) {
+    const adv = prediction?.predicted_advancing_team_id;
+    if (adv != null && adv !== tbdId && (adv === homeId || adv === awayId)) {
+      return adv;
+    }
     return null;
   }
   return resolveKnockoutAdvancingTeamId(match, prediction, homeId, awayId, tbdId);
+}
+
+/** Construye el cuadro de premios a partir del bracket resuelto y las predicciones. */
+export function buildDerivedBracketBonusPicks(
+  rows: KnockoutMatchRow[],
+  roundByMatchId: Map<number, string>,
+  resolved: Map<number, { homeTeamId: number; awayTeamId: number }>,
+  preds: Map<number, UserPredictionRow>,
+  tbdId: number
+): DerivedBracketBonusPicks {
+  const teamsInRound = (roundKey: string): number[] => {
+    const ids: number[] = [];
+    for (const row of rows) {
+      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
+      const num = knockoutExternalNum(row.external_id);
+      if (num == null) continue;
+      const slot = resolved.get(num);
+      if (!slot) continue;
+      ids.push(slot.homeTeamId, slot.awayTeamId);
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const advancingWinnersInRound = (roundKey: string): number[] => {
+    const ids: number[] = [];
+    for (const row of rows) {
+      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
+      const num = knockoutExternalNum(row.external_id);
+      if (num == null) continue;
+      const slot = resolved.get(num);
+      if (!slot) continue;
+      const adv = advancingFromPrediction(
+        row,
+        slot.homeTeamId,
+        slot.awayTeamId,
+        preds.get(Number(row.id)),
+        tbdId
+      );
+      if (adv) ids.push(adv);
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const mergeRounds = (...roundKeys: string[]): number[] => {
+    const ids: number[] = [];
+    for (const key of roundKeys) {
+      ids.push(...teamsInRound(key), ...advancingWinnersInRound(key));
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const semifinalistTeamIds = mergeRounds("SF", "R4");
+  const finalistTeamIds = mergeRounds("F", "SF");
+
+  let championTeamId: number | null = null;
+  let runnerUpTeamId: number | null = null;
+  let thirdPlaceTeamId: number | null = null;
+
+  for (const row of rows) {
+    const round = roundByMatchId.get(Number(row.id))?.toUpperCase();
+    const num = knockoutExternalNum(row.external_id);
+    if (num == null) continue;
+    const slot = resolved.get(num);
+    if (!slot) continue;
+
+    const homeId = Number(slot.homeTeamId);
+    const awayId = Number(slot.awayTeamId);
+    const adv = advancingFromPrediction(row, homeId, awayId, preds.get(Number(row.id)), tbdId);
+    if (!adv) continue;
+
+    if (round === "F") {
+      championTeamId = adv;
+      const other = homeId === adv ? awayId : homeId;
+      runnerUpTeamId = other !== tbdId ? other : null;
+    } else if (round === "TP3") {
+      thirdPlaceTeamId = adv;
+    }
+  }
+
+  const finalWinners = advancingWinnersInRound("F");
+  if (!championTeamId && finalWinners.length === 1) {
+    championTeamId = finalWinners[0];
+  }
+
+  return {
+    championTeamId,
+    runnerUpTeamId,
+    thirdPlaceTeamId,
+    semifinalistTeamIds: semifinalistTeamIds.slice(0, 4),
+    finalistTeamIds: finalistTeamIds.slice(0, 2)
+  };
 }
 
 /** Cuadro de premios (campeón, finalistas, etc.) a partir de predicciones en eliminatorias. */
 export async function deriveBonusPicksFromUserBracket(
   userId: number
 ): Promise<DerivedBracketBonusPicks> {
+  const empty: DerivedBracketBonusPicks = {
+    championTeamId: null,
+    runnerUpTeamId: null,
+    thirdPlaceTeamId: null,
+    semifinalistTeamIds: [],
+    finalistTeamIds: []
+  };
+
   const tournamentId = await getActiveTournamentId();
-  if (!tournamentId) {
-    return {
-      championTeamId: null,
-      runnerUpTeamId: null,
-      thirdPlaceTeamId: null,
-      semifinalistTeamIds: [],
-      finalistTeamIds: []
-    };
-  }
+  if (!tournamentId) return empty;
 
   const rows = await loadKnockoutRowsForTournament(tournamentId);
-  if (rows.length === 0) {
-    return {
-      championTeamId: null,
-      runnerUpTeamId: null,
-      thirdPlaceTeamId: null,
-      semifinalistTeamIds: [],
-      finalistTeamIds: []
-    };
-  }
+  if (rows.length === 0) return empty;
 
   const tbdId = await getTbdTeamId();
   const preds = await loadPredictionsMap(
@@ -90,54 +178,7 @@ export async function deriveBonusPicksFromUserBracket(
     roundByMatchId.set(Number(r.id), String(r.round_key ?? ""));
   }
 
-  const teamsInRound = (roundKey: string): number[] => {
-    const ids: number[] = [];
-    for (const row of rows) {
-      if (roundByMatchId.get(row.id)?.toUpperCase() !== roundKey) continue;
-      const num = knockoutExternalNum(row.external_id);
-      if (num == null) continue;
-      const slot = resolved.get(num);
-      if (!slot) continue;
-      ids.push(slot.homeTeamId, slot.awayTeamId);
-    }
-    return uniqueValidTeamIds(ids, tbdId);
-  };
-
-  const semifinalistTeamIds = teamsInRound("SF");
-  const finalistTeamIds = teamsInRound("F");
-
-  let championTeamId: number | null = null;
-  let runnerUpTeamId: number | null = null;
-  let thirdPlaceTeamId: number | null = null;
-
-  for (const row of rows) {
-    const round = roundByMatchId.get(row.id)?.toUpperCase();
-    const num = knockoutExternalNum(row.external_id);
-    if (num == null) continue;
-    const slot = resolved.get(num);
-    if (!slot) continue;
-
-    const homeId = slot.homeTeamId;
-    const awayId = slot.awayTeamId;
-    const adv = advancingFromPrediction(row, homeId, awayId, preds.get(row.id), tbdId);
-    if (!adv) continue;
-
-    if (round === "F") {
-      championTeamId = adv;
-      const other = homeId === adv ? awayId : homeId;
-      runnerUpTeamId = other !== tbdId ? other : null;
-    } else if (round === "TP3") {
-      thirdPlaceTeamId = adv;
-    }
-  }
-
-  return {
-    championTeamId,
-    runnerUpTeamId,
-    thirdPlaceTeamId,
-    semifinalistTeamIds,
-    finalistTeamIds
-  };
+  return buildDerivedBracketBonusPicks(rows, roundByMatchId, resolved, preds, tbdId);
 }
 
 export async function syncUserBonusPicksFromBracket(userId: number): Promise<DerivedBracketBonusPicks> {

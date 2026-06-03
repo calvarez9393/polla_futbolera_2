@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { PageTitle, SectionTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { PointsChips } from "../components/PointsChips";
 import { TeamFlag } from "../components/TeamFlag";
@@ -88,12 +89,18 @@ export function QualifiersPage() {
 
   return (
     <>
-      <h1 className="page-title">Cuadro de 32 — Fase 1</h1>
-      <p className="page-subtitle">
-        Simula quiénes llegan a los dieciseisavos: <strong>32 equipos</strong> (top 2 de cada grupo + 8 mejores
-        terceros), con la misma lógica FIFA y tus marcadores de grupos. Los puntos de clasificados en la polla son por
-        los <strong>24 directos</strong> (4 pts por acierto cuando el admin publique los oficiales).
-      </p>
+      <PageTitle
+        helpTitle="Cuadro de 32 — Fase 1"
+        help={
+          <p>
+            Simula quiénes llegan a los dieciseisavos: <strong>32 equipos</strong> (top 2 de cada grupo + 8 mejores
+            terceros), con la misma lógica FIFA y tus marcadores de grupos. Los puntos de clasificados en la polla son
+            por los <strong>24 directos</strong> (4 pts por acierto cuando el admin publique los oficiales).
+          </p>
+        }
+      >
+        Cuadro de 32 — Fase 1
+      </PageTitle>
 
       <PredictionsSubnav />
 
@@ -120,11 +127,6 @@ export function QualifiersPage() {
               </strong>{" "}
               ({data.directQualifiers.length} directos + {data.bestThirds.length} mejores terceros)
             </p>
-            <p className="admin-block-hint" style={{ marginTop: "0.5rem" }}>
-              Completa predicciones en{" "}
-              <Link to="/predictions">Partidos</Link>. Cada vez guardas un marcador de grupo, se actualiza tu cuadro de
-              32 automáticamente.
-            </p>
             <button
               type="button"
               className="btn btn-ghost"
@@ -148,11 +150,15 @@ export function QualifiersPage() {
           </div>
 
           <section className="panel-card" style={{ marginBottom: "1rem" }}>
-            <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Dieciseisavos oficiales</h2>
-            <p className="admin-block-hint" style={{ marginBottom: "0.75rem" }}>
-              El cuadro de 16 avos lo publica el administrador con los resultados reales. Tus cruces simulados se ven al
-              predecir en Eliminatorias.
-            </p>
+            <SectionTitle
+              title="Dieciseisavos oficiales"
+              help={
+                <p>
+                  El cuadro de 16 avos lo publica el administrador con los resultados reales. Tus cruces simulados se
+                  ven al predecir en Eliminatorias.
+                </p>
+              }
+            />
             <Link to="/predictions/r16" className="btn btn-primary">
               Ver cuadro oficial
             </Link>
