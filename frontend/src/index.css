@@ -1380,6 +1380,53 @@ p {
   margin-bottom: 1.25rem;
 }
 
+.prize-pool-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: var(--purple-card);
+  border: 1px solid var(--purple-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.25rem;
+  backdrop-filter: blur(12px);
+  flex-wrap: wrap;
+}
+
+.prize-pool-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 2rem;
+}
+
+.prize-pool-item--highlight .prize-pool-value {
+  color: #34d399;
+}
+
+.prize-pool-divider {
+  width: 1px;
+  height: 2.5rem;
+  background: var(--border-subtle);
+}
+
+.prize-pool-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.prize-pool-value {
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .stats-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

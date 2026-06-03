@@ -14,6 +14,12 @@ interface LeaderRow {
   late_stage_points: number;
 }
 
+const fmt = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0
+});
+
 export function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +32,9 @@ export function LeaderboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const totalRecaudo = rows.reduce((sum, r) => sum + Number(r.amount_paid ?? 0), 0);
+  const premio = totalRecaudo * 0.7;
+
   return (
     <>
       <h1 className="page-title">Ranking</h1>
@@ -33,6 +42,20 @@ export function LeaderboardPage() {
         Tabla general acumulada. En empate: marcadores exactos → clasificados → equipos en fases finales →
         puntos en semis/final.
       </p>
+
+      {!loading && totalRecaudo > 0 && (
+        <div className="prize-pool-banner">
+          <div className="prize-pool-item">
+            <span className="prize-pool-label">Recaudo acumulado</span>
+            <span className="prize-pool-value">{fmt.format(totalRecaudo)}</span>
+          </div>
+          <div className="prize-pool-divider" />
+          <div className="prize-pool-item prize-pool-item--highlight">
+            <span className="prize-pool-label">Premio (70%)</span>
+            <span className="prize-pool-value">{fmt.format(premio)}</span>
+          </div>
+        </div>
+      )}
 
       <div className="panel-card">
         {loading ? (
@@ -50,7 +73,6 @@ export function LeaderboardPage() {
                 <tr>
                   <th>Pos</th>
                   <th>Jugador</th>
-                  {me?.role === "ADMIN" && <th>Pagado</th>}
                   <th>Pts</th>
                   <th title="Desempate 1">Exactos</th>
                   <th title="Desempate 2">Clasif.</th>
@@ -72,15 +94,6 @@ export function LeaderboardPage() {
                         </span>
                       )}
                     </td>
-                    {me?.role === "ADMIN" && (
-                      <td>
-                        {new Intl.NumberFormat("es-CO", {
-                          style: "currency",
-                          currency: "COP",
-                          maximumFractionDigits: 0
-                        }).format(Number(row.amount_paid ?? 0))}
-                      </td>
-                    )}
                     <td>
                       <strong style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem" }}>
                         {row.total_points}
