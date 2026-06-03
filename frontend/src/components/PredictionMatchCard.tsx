@@ -12,6 +12,8 @@ import {
   showsKnockoutAdvancingUi
 } from "../lib/knockoutAdvancing";
 import { KnockoutAdvancingBanner } from "./KnockoutAdvancingBanner";
+import { MatchupScoreStrip, matchupToTeams } from "./MatchupScoreStrip";
+import { sameMatchup, type PredictedMatchup } from "./predictedMatchup";
 
 export interface CalendarPredictionMatch {
   id: number | string;
@@ -36,6 +38,10 @@ export interface CalendarPredictionMatch {
   advancingTeamName?: string | null;
   advancingTeamLogoUrl?: string | null;
   advancingViaPenalties?: boolean;
+  officialAdvancingTeamId?: number | null;
+  officialAdvancingTeamName?: string | null;
+  officialAdvancingTeamLogoUrl?: string | null;
+  officialAdvancingViaPenalties?: boolean;
   nextRoundLabel?: string | null;
   predictionsOpen: boolean;
   predictionLockAt: string;
@@ -52,6 +58,8 @@ export interface CalendarPredictionMatch {
     predictedAwayScore: number;
     predictedAdvancingTeamId?: number | null;
   } | null;
+  predictedMatchup?: PredictedMatchup | null;
+  officialMatchup?: PredictedMatchup | null;
   earnedPoints: number | null;
   earnedBreakdown: Record<string, number> | null;
 }
@@ -127,6 +135,40 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
 
   const displayViaPenalties = showAdvancingUi && isDrawPrediction && Boolean(effectiveAdvancingId);
 
+  const predictedAdvancingName =
+    match.prediction && match.advancingTeamName
+      ? match.advancingTeamName
+      : displayAdvancingName;
+
+  const predictedAdvancingLogo =
+    match.advancingTeamLogoUrl ?? displayAdvancingLogo;
+
+  const predictedAdvancingViaPenalties =
+    match.prediction != null
+      ? match.advancingViaPenalties ??
+        (showAdvancingUi &&
+          match.prediction.predictedHomeScore === match.prediction.predictedAwayScore &&
+          Boolean(match.advancingTeamId ?? effectiveAdvancingId))
+      : false;
+
+  const savedMatchup =
+    match.stage === "KNOCKOUT" && match.prediction && match.predictedMatchup
+      ? match.predictedMatchup
+      : null;
+  const currentMatchup =
+    match.homeTeamId != null && match.awayTeamId != null
+      ? { homeTeamId: match.homeTeamId, awayTeamId: match.awayTeamId }
+      : null;
+  const matchupDiffers =
+    savedMatchup != null &&
+    currentMatchup != null &&
+    !sameMatchup(savedMatchup, currentMatchup);
+
+  const showSavedInHeader =
+    match.stage === "KNOCKOUT" && match.prediction != null && savedMatchup != null;
+
+  const officialTeams = match.officialMatchup ? matchupToTeams(match.officialMatchup) : null;
+
   async function savePrediction() {
     if (needsAdvancingOnDraw && isDrawPrediction && !effectiveAdvancingId) {
       setIsError(true);
@@ -166,26 +208,92 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
 
   return (
     <article className={`match-card prediction-match-card${matchCardStatusClass(match.status)}${match.prediction != null ? " prediction-match-card--filled" : ""}`}>
-      <div className="match-team home">
-        <span className="match-team-name">{match.homeTeamName}</span>
-        <TeamFlag name={match.homeTeamName} logoUrl={match.homeTeamLogoUrl} size="lg" />
-      </div>
-      <div className="match-score">
-        {match.homeScore ?? "–"} : {match.awayScore ?? "–"}
-      </div>
-      <div className="match-team away">
-        <TeamFlag name={match.awayTeamName} logoUrl={match.awayTeamLogoUrl} size="lg" />
-        <span className="match-team-name">{match.awayTeamName}</span>
-      </div>
+      {showSavedInHeader ? (
+        <>
+          <MatchupScoreStrip
+            className="matchup-score-strip--in-card"
+            variant="prediction"
+            label="Partido que predijiste"
+            teams={{
+              homeTeamName: savedMatchup.homeTeamName,
+              homeTeamLogoUrl: savedMatchup.homeTeamLogoUrl,
+              awayTeamName: savedMatchup.awayTeamName,
+              awayTeamLogoUrl: savedMatchup.awayTeamLogoUrl
+            }}
+            homeScore={match.prediction!.predictedHomeScore}
+            awayScore={match.prediction!.predictedAwayScore}
+          />
+          {match.status === "FINISHED" && officialTeams && (
+            <MatchupScoreStrip
+              className="matchup-score-strip--in-card matchup-score-strip--official"
+              variant="compact"
+              label="Resultado real"
+              teams={officialTeams}
+              homeScore={match.homeScore}
+              awayScore={match.awayScore}
+            />
+          )}
+          {matchupDiffers && canPredict && (
+            <MatchupScoreStrip
+              className="matchup-score-strip--in-card matchup-score-strip--current"
+              variant="compact"
+              label="Cuadro actual (si guardas de nuevo)"
+              teams={{
+                homeTeamName: match.homeTeamName,
+                homeTeamLogoUrl: match.homeTeamLogoUrl,
+                awayTeamName: match.awayTeamName,
+                awayTeamLogoUrl: match.awayTeamLogoUrl
+              }}
+              homeScore={null}
+              awayScore={null}
+            />
+          )}
+        </>
+      ) : match.status === "FINISHED" && officialTeams ? (
+        <MatchupScoreStrip
+          className="matchup-score-strip--in-card matchup-score-strip--official"
+          label="Resultado real"
+          teams={officialTeams}
+          homeScore={match.homeScore}
+          awayScore={match.awayScore}
+        />
+      ) : (
+        <>
+          <div className="match-team home">
+            <span className="match-team-name">{match.homeTeamName}</span>
+            <TeamFlag name={match.homeTeamName} logoUrl={match.homeTeamLogoUrl} size="lg" />
+          </div>
+          <div className="match-score">
+            {match.homeScore ?? "–"} : {match.awayScore ?? "–"}
+          </div>
+          <div className="match-team away">
+            <TeamFlag name={match.awayTeamName} logoUrl={match.awayTeamLogoUrl} size="lg" />
+            <span className="match-team-name">{match.awayTeamName}</span>
+          </div>
+        </>
+      )}
 
-      {showAdvancingUi && displayAdvancingName && (
+      {showAdvancingUi && match.prediction && predictedAdvancingName && (
         <KnockoutAdvancingBanner
-          teamName={displayAdvancingName}
-          logoUrl={match.advancingTeamLogoUrl ?? displayAdvancingLogo}
+          kind="prediction"
+          teamName={predictedAdvancingName}
+          logoUrl={predictedAdvancingLogo}
           nextRoundLabel={nextLabel}
-          viaPenalties={displayViaPenalties}
+          viaPenalties={predictedAdvancingViaPenalties}
         />
       )}
+
+      {showAdvancingUi &&
+        match.status === "FINISHED" &&
+        match.officialAdvancingTeamName && (
+          <KnockoutAdvancingBanner
+            kind="official"
+            teamName={match.officialAdvancingTeamName}
+            logoUrl={match.officialAdvancingTeamLogoUrl}
+            nextRoundLabel={nextLabel}
+            viaPenalties={match.officialAdvancingViaPenalties}
+          />
+        )}
 
       <div className="match-meta">
         <span className={statusBadgeClass(match.status)}>{statusLabel(match.status)}</span>
@@ -217,7 +325,10 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
 
       {!readOnly && (
       <div className="prediction-card-body">
-        <p className="prediction-card-label">Tu predicción</p>
+        {!showSavedInHeader && <p className="prediction-card-label">Tu predicción</p>}
+        {showSavedInHeader && canPredict && (
+          <p className="prediction-card-label">Actualizar marcador</p>
+        )}
         {canPredict ? (
           <>
             <div className="score-inputs prediction-card-scores">
@@ -275,11 +386,13 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
           </>
         ) : (
           <>
-            <p className="prediction-card-readonly">
-              {match.prediction
-                ? `${match.prediction.predictedHomeScore} : ${match.prediction.predictedAwayScore}`
-                : "Sin predicción"}
-            </p>
+            {!showSavedInHeader && (
+              <p className="prediction-card-readonly">
+                {match.prediction
+                  ? `${match.prediction.predictedHomeScore} : ${match.prediction.predictedAwayScore}`
+                  : "Sin predicción"}
+              </p>
+            )}
             {windowClosed && match.predictionWindow && (
               <p className="admin-block-hint" style={{ margin: 0 }}>
                 Ventana{" "}

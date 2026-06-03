@@ -168,6 +168,51 @@ export async function getUserR16SlotTeamIds(
   return { homeTeamId: slot.homeTeamId, awayTeamId: slot.awayTeamId };
 }
 
+/** Clasificados reales en cada cruce de dieciseisavos (BD o tablas oficiales de grupos). */
+export async function loadOfficialR16SlotsMap(
+  tournamentId: number
+): Promise<Map<number, { homeTeamId: number; awayTeamId: number }>> {
+  const tbdId = await getTbdTeamId();
+  const map = new Map<number, { homeTeamId: number; awayTeamId: number }>();
+
+  const result = await pool.query(
+    `SELECT external_id, home_team_id, away_team_id
+    FROM matches
+    WHERE tournament_id = $1 AND stage = 'KNOCKOUT' AND round_key = 'R16'`,
+    [tournamentId]
+  );
+
+  let poolResolved: ReturnType<typeof resolveR16FromPool> | null = null;
+  try {
+    const fifa = await computeOfficialFifaFromResults();
+    poolResolved = resolveR16FromPool(WC2026_R16_FIXTURES, poolFromFifa(fifa, tbdId), new Map());
+  } catch {
+    poolResolved = null;
+  }
+
+  for (const row of result.rows) {
+    const num = knockoutExternalNum(row.external_id as string);
+    if (num == null) continue;
+
+    const h = Number(row.home_team_id);
+    const a = Number(row.away_team_id);
+    if (h !== tbdId && a !== tbdId) {
+      map.set(num, { homeTeamId: h, awayTeamId: a });
+      continue;
+    }
+
+    if (poolResolved) {
+      const fx = WC2026_R16_FIXTURES.find((f) => f.externalNum === num);
+      const slot = poolResolved.find((r) => r.matchNumber === fx?.matchNumber);
+      if (slot?.homeTeamId && slot?.awayTeamId) {
+        map.set(num, { homeTeamId: slot.homeTeamId, awayTeamId: slot.awayTeamId });
+      }
+    }
+  }
+
+  return map;
+}
+
 export function resolveR16FromPool(
   fixtures: R16FixtureDef[],
   pool: QualifierPool,

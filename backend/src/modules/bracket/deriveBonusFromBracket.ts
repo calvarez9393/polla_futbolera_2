@@ -16,7 +16,8 @@ import {
 import {
   getOfficialBonusResults,
   setOfficialBonusResults,
-  type OfficialBonusResults
+  type OfficialBonusResults,
+  type CalculateBonusScoresResult
 } from "../scoring/bonuses.js";
 import { resolveKnockoutAdvancingTeamId } from "./knockoutAdvancingResolve.js";
 
@@ -60,6 +61,12 @@ function advancingFromPrediction(
   return resolveKnockoutAdvancingTeamId(match, prediction, homeId, awayId, tbdId);
 }
 
+function hasUserKnockoutPick(prediction: UserPredictionRow | undefined): boolean {
+  if (!prediction) return false;
+  if (prediction.predicted_advancing_team_id != null) return true;
+  return prediction.predicted_home_score != null && prediction.predicted_away_score != null;
+}
+
 /** Construye el cuadro de premios a partir del bracket resuelto y las predicciones. */
 export function buildDerivedBracketBonusPicks(
   rows: KnockoutMatchRow[],
@@ -68,19 +75,6 @@ export function buildDerivedBracketBonusPicks(
   preds: Map<number, UserPredictionRow>,
   tbdId: number
 ): DerivedBracketBonusPicks {
-  const teamsInRound = (roundKey: string): number[] => {
-    const ids: number[] = [];
-    for (const row of rows) {
-      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
-      const num = knockoutExternalNum(row.external_id);
-      if (num == null) continue;
-      const slot = resolved.get(num);
-      if (!slot) continue;
-      ids.push(slot.homeTeamId, slot.awayTeamId);
-    }
-    return uniqueValidTeamIds(ids, tbdId);
-  };
-
   const advancingWinnersInRound = (roundKey: string): number[] => {
     const ids: number[] = [];
     for (const row of rows) {
@@ -101,16 +95,33 @@ export function buildDerivedBracketBonusPicks(
     return uniqueValidTeamIds(ids, tbdId);
   };
 
-  const mergeRounds = (...roundKeys: string[]): number[] => {
+  const teamsInRoundIfPredicted = (roundKey: string): number[] => {
     const ids: number[] = [];
-    for (const key of roundKeys) {
-      ids.push(...teamsInRound(key), ...advancingWinnersInRound(key));
+    for (const row of rows) {
+      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
+      if (!hasUserKnockoutPick(preds.get(Number(row.id)))) continue;
+      const num = knockoutExternalNum(row.external_id);
+      if (num == null) continue;
+      const slot = resolved.get(num);
+      if (!slot) continue;
+      ids.push(slot.homeTeamId, slot.awayTeamId);
     }
     return uniqueValidTeamIds(ids, tbdId);
   };
 
-  const semifinalistTeamIds = mergeRounds("SF", "R4");
-  const finalistTeamIds = mergeRounds("F", "SF");
+  const advancingOnlyMerge = (...roundKeys: string[]): number[] => {
+    const ids: number[] = [];
+    for (const key of roundKeys) {
+      ids.push(...advancingWinnersInRound(key));
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const semifinalistTeamIds = advancingOnlyMerge("SF", "R4");
+  const finalistTeamIds = uniqueValidTeamIds(
+    [...advancingWinnersInRound("SF"), ...teamsInRoundIfPredicted("F")],
+    tbdId
+  ).slice(0, 2);
 
   let championTeamId: number | null = null;
   let runnerUpTeamId: number | null = null;
@@ -174,7 +185,8 @@ export async function deriveBonusPicksFromUserBracket(
     userId,
     rows.map((r) => r.id)
   );
-  const resolved = resolveKnockoutBracketTeams(rows, preds, tbdId);
+  const { resolveUserKnockoutBracketTeams } = await import("./resolveUserKnockoutBracket.js");
+  const resolved = await resolveUserKnockoutBracketTeams(userId, tournamentId);
 
   const roundByMatchId = new Map<number, string>();
   const roundRows = await pool.query(
@@ -346,13 +358,19 @@ export async function deriveOfficialBonusFromRealBracket(
 }
 
 /** Actualiza resultados oficiales de bonos (finalistas reales) y puntúa vs cuadro de cada usuario. */
-export async function syncOfficialBonusResultsAndScore(): Promise<{
-  official: OfficialBonusResults;
-  usersScored: number;
-}> {
+export async function syncOfficialBonusResultsAndScore(): Promise<
+  CalculateBonusScoresResult & { official: OfficialBonusResults }
+> {
   const tournamentId = await getActiveTournamentId();
   if (!tournamentId) {
-    return { official: {}, usersScored: 0 };
+    return {
+      official: {},
+      usersScored: 0,
+      officialFinalists: { ids: [], names: [] },
+      officialSemifinalists: { ids: [], names: [] },
+      finalistComparisons: [],
+      semifinalistComparisons: []
+    };
   }
 
   const derived = await deriveOfficialBonusFromRealBracket(tournamentId);
@@ -373,7 +391,7 @@ export async function syncOfficialBonusResultsAndScore(): Promise<{
   }
 
   const { calculateBonusScores } = await import("../scoring/bonuses.js");
-  const { usersScored } = await calculateBonusScores();
+  const scoring = await calculateBonusScores();
 
-  return { official, usersScored };
+  return { official, ...scoring };
 }

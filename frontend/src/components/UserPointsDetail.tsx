@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PointsBreakdownList } from "./PointsBreakdownList";
 import { PointsChips } from "./PointsChips";
-import { TeamFlag } from "./TeamFlag";
+import { MatchupScoreStrip, matchupToTeams } from "./MatchupScoreStrip";
+import { KnockoutAdvancingBanner } from "./KnockoutAdvancingBanner";
+import type { PredictedMatchup } from "./predictedMatchup";
 import { api } from "../lib/api";
 import { ROUND_LABELS } from "../lib/scoringLabels";
 import { matchCardStatusClass, statusBadgeClass, statusLabel } from "../lib/matchStatus";
@@ -23,6 +25,19 @@ export interface ScoreMatch {
   awayScore: number | null;
   predictedHomeScore: number | null;
   predictedAwayScore: number | null;
+  predictedMatchup?: PredictedMatchup | null;
+  officialMatchup?: PredictedMatchup | null;
+  predictedAdvancing?: {
+    teamName: string;
+    teamLogoUrl?: string | null;
+    viaPenalties: boolean;
+  } | null;
+  officialAdvancing?: {
+    teamName: string;
+    teamLogoUrl?: string | null;
+    viaPenalties: boolean;
+  } | null;
+  nextRoundLabel?: string | null;
   points: number;
   breakdown: Record<string, number>;
 }
@@ -62,35 +77,71 @@ function MatchPointsCard({
   match: ScoreMatch;
   predictionLabel?: string;
 }) {
+  const predictedTeams = match.predictedMatchup
+    ? matchupToTeams(match.predictedMatchup)
+    : {
+        homeTeamName: match.homeTeamName,
+        homeTeamLogoUrl: match.homeTeamLogoUrl,
+        awayTeamName: match.awayTeamName,
+        awayTeamLogoUrl: match.awayTeamLogoUrl
+      };
+
+  const officialTeams = match.officialMatchup
+    ? matchupToTeams(match.officialMatchup)
+    : {
+        homeTeamName: match.homeTeamName,
+        homeTeamLogoUrl: match.homeTeamLogoUrl,
+        awayTeamName: match.awayTeamName,
+        awayTeamLogoUrl: match.awayTeamLogoUrl
+      };
+
   return (
     <article className={`user-points-card user-points-card--match match-card${matchCardStatusClass(match.status)}`}>
       <header className="user-points-card-head">
-        <div className="user-points-match-teams">
-          <TeamFlag name={match.homeTeamName} logoUrl={match.homeTeamLogoUrl} size="sm" />
-          <span className="user-points-match-names">
-            {match.homeTeamName} vs {match.awayTeamName}
-          </span>
-          <TeamFlag name={match.awayTeamName} logoUrl={match.awayTeamLogoUrl} size="sm" />
-        </div>
         <span className="user-points-card-total">+{match.points} pts</span>
       </header>
 
-      <div className="user-points-scores-row">
-        <div>
-          <span className="user-points-mini-label">Real</span>
-          <strong>
-            {match.homeScore ?? "–"} : {match.awayScore ?? "–"}
-          </strong>
-        </div>
-        {match.predictedHomeScore != null && (
-          <div>
-            <span className="user-points-mini-label">{predictionLabel}</span>
-            <strong>
-              {match.predictedHomeScore} : {match.predictedAwayScore}
-            </strong>
-          </div>
-        )}
-      </div>
+      {match.predictedHomeScore != null && (
+        <MatchupScoreStrip
+          className="matchup-score-strip--in-card"
+          variant="prediction"
+          label={predictionLabel}
+          teams={predictedTeams}
+          homeScore={match.predictedHomeScore}
+          awayScore={match.predictedAwayScore}
+        />
+      )}
+
+      <MatchupScoreStrip
+        className="matchup-score-strip--in-card matchup-score-strip--official"
+        variant="compact"
+        label="Resultado real"
+        teams={officialTeams}
+        homeScore={match.homeScore}
+        awayScore={match.awayScore}
+      />
+
+      {match.stage === "KNOCKOUT" && match.predictedAdvancing && (
+        <KnockoutAdvancingBanner
+          kind="prediction"
+          compact
+          teamName={match.predictedAdvancing.teamName}
+          logoUrl={match.predictedAdvancing.teamLogoUrl}
+          nextRoundLabel={match.nextRoundLabel ?? "siguiente ronda"}
+          viaPenalties={match.predictedAdvancing.viaPenalties}
+        />
+      )}
+
+      {match.stage === "KNOCKOUT" && match.officialAdvancing && (
+        <KnockoutAdvancingBanner
+          kind="official"
+          compact
+          teamName={match.officialAdvancing.teamName}
+          logoUrl={match.officialAdvancing.teamLogoUrl}
+          nextRoundLabel={match.nextRoundLabel ?? "siguiente ronda"}
+          viaPenalties={match.officialAdvancing.viaPenalties}
+        />
+      )}
 
       <p className="user-points-card-meta">
         <span className={statusBadgeClass(match.status)}>{statusLabel(match.status)}</span>

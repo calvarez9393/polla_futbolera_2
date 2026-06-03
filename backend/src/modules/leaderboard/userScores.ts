@@ -1,4 +1,5 @@
 import { pool } from "../../db/pool.js";
+import { predictedMatchupFromRow, officialMatchupFromRow } from "../bracket/resolveUserSlotTeams.js";
 
 function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
   const fromBreakdown = breakdown.date;
@@ -76,6 +77,63 @@ function mapExtraScore(row: {
   }
 }
 
+function resolvePredictedAdvancing(
+  row: Record<string, unknown>,
+  predictedMatchup: ReturnType<typeof predictedMatchupFromRow>
+): {
+  teamName: string;
+  teamLogoUrl: string | null;
+  viaPenalties: boolean;
+} | null {
+  if (row.stage !== "KNOCKOUT" || row.predicted_home_score == null || !predictedMatchup) {
+    return null;
+  }
+
+  const ph = row.predicted_home_score as number;
+  const pa = row.predicted_away_score as number;
+  const viaPenalties = ph === pa;
+
+  if (row.predicted_advancing_team_id && row.predicted_advancing_team_name) {
+    return {
+      teamName: row.predicted_advancing_team_name as string,
+      teamLogoUrl: (row.predicted_advancing_team_logo_url as string | null) ?? null,
+      viaPenalties
+    };
+  }
+
+  if (ph !== pa) {
+    const homeWins = ph > pa;
+    return {
+      teamName: homeWins ? predictedMatchup.homeTeamName : predictedMatchup.awayTeamName,
+      teamLogoUrl: homeWins
+        ? (predictedMatchup.homeTeamLogoUrl ?? null)
+        : (predictedMatchup.awayTeamLogoUrl ?? null),
+      viaPenalties: false
+    };
+  }
+
+  return null;
+}
+
+function nextRoundLabelFromKey(roundKey: string | null | undefined): string {
+  switch (roundKey?.toUpperCase()) {
+    case "R16":
+      return "octavos de final";
+    case "R8":
+      return "cuartos de final";
+    case "R4":
+      return "semifinal";
+    case "SF":
+      return "la final";
+    case "F":
+      return "el campeonato";
+    case "TP3":
+      return "3.er puesto";
+    default:
+      return "siguiente ronda";
+  }
+}
+
 export async function fetchUserScores(userId: number) {
   const totalResult = await pool.query(
     `SELECT COALESCE(SUM(points), 0)::int AS total_points
@@ -100,19 +158,37 @@ export async function fetchUserScores(userId: number) {
       m.round_label,
       m.home_score,
       m.away_score,
+      m.home_team_id,
+      m.away_team_id,
+      m.winner_team_id,
       g.name AS group_name,
       ht.name AS home_team_name,
       ht.logo_url AS home_team_logo_url,
       at.name AS away_team_name,
       at.logo_url AS away_team_logo_url,
       p.predicted_home_score,
-      p.predicted_away_score
+      p.predicted_away_score,
+      p.predicted_advancing_team_id,
+      p.bracket_home_team_id,
+      p.bracket_away_team_id,
+      bht.name AS bracket_home_team_name,
+      bht.logo_url AS bracket_home_team_logo_url,
+      bat.name AS bracket_away_team_name,
+      bat.logo_url AS bracket_away_team_logo_url,
+      padv.name AS predicted_advancing_team_name,
+      padv.logo_url AS predicted_advancing_team_logo_url,
+      wt.name AS official_advancing_team_name,
+      wt.logo_url AS official_advancing_team_logo_url
     FROM prediction_scores ps
     JOIN matches m ON m.id = ps.source_id AND ps.source_type = 'MATCH'
     JOIN teams ht ON ht.id = m.home_team_id
     JOIN teams at ON at.id = m.away_team_id
     LEFT JOIN groups g ON g.id = m.group_id
     LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = ps.user_id
+    LEFT JOIN teams bht ON bht.id = p.bracket_home_team_id
+    LEFT JOIN teams bat ON bat.id = p.bracket_away_team_id
+    LEFT JOIN teams padv ON padv.id = p.predicted_advancing_team_id
+    LEFT JOIN teams wt ON wt.id = m.winner_team_id
     WHERE ps.user_id = $1
     ORDER BY m.starts_at DESC`,
     [userId]
@@ -137,25 +213,90 @@ export async function fetchUserScores(userId: number) {
     totalsBySource,
     matchPointsTotal: totalsBySource.MATCH ?? 0,
     extrasPointsTotal: totalPoints - (totalsBySource.MATCH ?? 0),
-    matches: matchesResult.rows.map((row) => ({
-      matchId: Number(row.match_id),
-      startsAt: row.starts_at,
-      status: row.status,
-      stage: row.stage,
-      roundKey: row.round_key,
-      roundLabel: row.round_label,
-      groupName: row.group_name,
-      homeTeamName: row.home_team_name,
-      homeTeamLogoUrl: row.home_team_logo_url,
-      awayTeamName: row.away_team_name,
-      awayTeamLogoUrl: row.away_team_logo_url,
-      homeScore: row.home_score,
-      awayScore: row.away_score,
-      predictedHomeScore: row.predicted_home_score,
-      predictedAwayScore: row.predicted_away_score,
-      points: row.points,
-      breakdown: row.breakdown
-    })),
+    matches: matchesResult.rows.map((row) => {
+      const predictedMatchup = predictedMatchupFromRow({
+        stage: row.stage as string,
+        predicted_home_score: row.predicted_home_score as number | null,
+        bracket_home_team_id: row.bracket_home_team_id as number | null,
+        bracket_away_team_id: row.bracket_away_team_id as number | null,
+        bracket_home_team_name: row.bracket_home_team_name as string | null,
+        bracket_away_team_name: row.bracket_away_team_name as string | null,
+        bracket_home_team_logo_url: row.bracket_home_team_logo_url as string | null,
+        bracket_away_team_logo_url: row.bracket_away_team_logo_url as string | null,
+        home_team_id: row.home_team_id,
+        away_team_id: row.away_team_id,
+        home_team_name: row.home_team_name as string,
+        away_team_name: row.away_team_name as string,
+        home_team_logo_url: row.home_team_logo_url as string | null,
+        away_team_logo_url: row.away_team_logo_url as string | null
+      });
+
+      const predictedAdvancing = resolvePredictedAdvancing(row, predictedMatchup);
+      let officialAdvancing: {
+        teamName: string;
+        teamLogoUrl: string | null;
+        viaPenalties: boolean;
+      } | null = null;
+      if (row.status === "FINISHED" && row.home_score != null && row.away_score != null) {
+        const viaPenalties = row.home_score === row.away_score;
+        if (row.official_advancing_team_name) {
+          officialAdvancing = {
+            teamName: row.official_advancing_team_name as string,
+            teamLogoUrl: (row.official_advancing_team_logo_url as string | null) ?? null,
+            viaPenalties
+          };
+        } else if (!viaPenalties) {
+          const homeWins = (row.home_score as number) > (row.away_score as number);
+          officialAdvancing = {
+            teamName: homeWins ? (row.home_team_name as string) : (row.away_team_name as string),
+            teamLogoUrl: homeWins
+              ? ((row.home_team_logo_url as string | null) ?? null)
+              : ((row.away_team_logo_url as string | null) ?? null),
+            viaPenalties: false
+          };
+        }
+      }
+
+      const officialMatchup = officialMatchupFromRow({
+        official_home_team_id: row.home_team_id,
+        official_away_team_id: row.away_team_id,
+        official_home_team_name: row.home_team_name as string,
+        official_away_team_name: row.away_team_name as string,
+        official_home_team_logo_url: row.home_team_logo_url as string | null,
+        official_away_team_logo_url: row.away_team_logo_url as string | null,
+        home_team_id: row.home_team_id,
+        away_team_id: row.away_team_id,
+        home_team_name: row.home_team_name as string,
+        away_team_name: row.away_team_name as string,
+        home_team_logo_url: row.home_team_logo_url as string | null,
+        away_team_logo_url: row.away_team_logo_url as string | null
+      });
+
+      return {
+        matchId: Number(row.match_id),
+        startsAt: row.starts_at,
+        status: row.status,
+        stage: row.stage,
+        roundKey: row.round_key,
+        roundLabel: row.round_label,
+        groupName: row.group_name,
+        homeTeamName: row.home_team_name,
+        homeTeamLogoUrl: row.home_team_logo_url,
+        awayTeamName: row.away_team_name,
+        awayTeamLogoUrl: row.away_team_logo_url,
+        homeScore: row.home_score,
+        awayScore: row.away_score,
+        predictedHomeScore: row.predicted_home_score,
+        predictedAwayScore: row.predicted_away_score,
+        predictedMatchup,
+        officialMatchup,
+        predictedAdvancing,
+        officialAdvancing,
+        nextRoundLabel: nextRoundLabelFromKey(row.round_key as string | null),
+        points: row.points,
+        breakdown: row.breakdown
+      };
+    }),
     extras: extrasResult.rows.map((row) =>
       mapExtraScore({
         source_type: row.source_type as string,

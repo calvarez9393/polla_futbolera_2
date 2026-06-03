@@ -82,4 +82,30 @@ describe("buildDerivedBracketBonusPicks", () => {
     expect(derived.runnerUpTeamId).toBe(F);
     expect(derived.finalistTeamIds).toEqual(expect.arrayContaining([E, F]));
   });
+
+  it("no infiere finalistas desde el cuadro oficial si el usuario no predijo eliminatorias", () => {
+    const rows = [
+      koRow(3, 101, E, F, "SF"),
+      koRow(4, 102, A, B, "SF"),
+      koRow(5, 104, E, F, "F")
+    ];
+    const preds = new Map<number, UserPredictionRow>();
+    const resolved = resolveKnockoutBracketTeams(rows, preds, TBD);
+    const derived = buildDerivedBracketBonusPicks(
+      rows,
+      roundMap([
+        [3, "SF"],
+        [4, "SF"],
+        [5, "F"]
+      ]),
+      resolved,
+      preds,
+      TBD
+    );
+
+    expect(derived.semifinalistTeamIds).toEqual([]);
+    expect(derived.finalistTeamIds).toEqual([]);
+    expect(derived.championTeamId).toBeNull();
+    expect(derived.runnerUpTeamId).toBeNull();
+  });
 });

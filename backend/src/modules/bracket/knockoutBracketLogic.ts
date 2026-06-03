@@ -145,7 +145,8 @@ function teamFromFeed(
 export function resolveKnockoutBracketTeams(
   rows: KnockoutMatchRow[],
   predictionsByMatchId: Map<number, UserPredictionRow>,
-  tbdId: number
+  tbdId: number,
+  r16OfficialSlots?: Map<number, { homeTeamId: number; awayTeamId: number }>
 ): Map<number, { homeTeamId: number; awayTeamId: number }> {
   const byNum = new Map<number, KnockoutMatchRow>();
   for (const row of rows) {
@@ -162,6 +163,12 @@ export function resolveKnockoutBracketTeams(
     const feeds = KNOCKOUT_SLOT_FEEDS[num];
     let homeTeamId = row.home_team_id;
     let awayTeamId = row.away_team_id;
+
+    const r16Seed = r16OfficialSlots?.get(num);
+    if (r16Seed && r16Seed.homeTeamId !== tbdId && r16Seed.awayTeamId !== tbdId) {
+      homeTeamId = r16Seed.homeTeamId;
+      awayTeamId = r16Seed.awayTeamId;
+    }
 
     if (feeds?.home) {
       const feeder = byNum.get(feeds.home.matchNum);

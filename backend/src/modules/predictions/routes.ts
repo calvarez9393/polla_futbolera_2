@@ -27,7 +27,8 @@ import {
   syncAllOfficialKnockoutAdvancement
 } from "../bracket/knockoutAdvancement.js";
 import { resolveKnockoutAdvancingForSave } from "../bracket/knockoutAdvancingSave.js";
-import { resolveUserSlotTeamsForMatch } from "../bracket/resolveUserSlotTeams.js";
+import { resolveUserSlotTeamsForMatch, predictionBracketJoinClause, predictionBracketSelectFields } from "../bracket/resolveUserSlotTeams.js";
+import { mapCalendarMatchRow } from "./mapCalendarMatch.js";
 import { syncUserBonusPicksFromBracket } from "../bracket/deriveBonusFromBracket.js";
 import { requiresKnockoutAdvancingTeam } from "../scoring/rulesConfig.js";
 import {
@@ -70,10 +71,12 @@ predictionsRouter.get("/me/calendar", async (req, res, next) => {
         p.predicted_home_score,
         p.predicted_away_score,
         p.predicted_advancing_team_id,
+        ${predictionBracketSelectFields},
         ps.points AS earned_points,
         ps.breakdown AS earned_breakdown
       ${matchFromClause}
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $3
+      ${predictionBracketJoinClause}
       LEFT JOIN prediction_scores ps ON ps.source_type = 'MATCH' AND ps.source_id = m.id AND ps.user_id = $3
       WHERE ${conditions.join(" AND ")}
       ORDER BY m.starts_at ASC`,
@@ -91,45 +94,7 @@ predictionsRouter.get("/me/calendar", async (req, res, next) => {
       result.rows.map(async (row) => {
         const lockAt = await resolvePredictionLockAt(row);
         const availability = await buildPredictionAvailability(row, lockAt, new Date(), knockoutConfig);
-        return {
-          id: row.id,
-          stage: row.stage,
-          roundKey: row.round_key,
-          status: row.status,
-          startsAt: row.starts_at,
-          kickoffTimeLocal: row.kickoff_time_local,
-          roundLabel: row.round_label,
-          matchday: row.matchday,
-          groupName: row.group_name,
-          homeTeamId: Number(row.home_team_id),
-          homeTeamName: row.home_team_name,
-          homeTeamLogoUrl: row.home_team_logo_url,
-          awayTeamId: Number(row.away_team_id),
-          awayTeamName: row.away_team_name,
-          awayTeamLogoUrl: row.away_team_logo_url,
-          homeScore: row.home_score,
-          awayScore: row.away_score,
-          winnerTeamId: row.winner_team_id ? Number(row.winner_team_id) : null,
-          ...availability,
-          predictionLockAt: lockAt.toISOString(),
-          prediction:
-            row.predicted_home_score != null
-              ? {
-                  predictedHomeScore: row.predicted_home_score,
-                  predictedAwayScore: row.predicted_away_score,
-                  predictedAdvancingTeamId: row.predicted_advancing_team_id
-                    ? Number(row.predicted_advancing_team_id)
-                    : null
-                }
-              : null,
-          advancingTeamId: row.advancingTeamId ? Number(row.advancingTeamId) : null,
-          advancingTeamName: (row.advancingTeamName as string) ?? null,
-          advancingTeamLogoUrl: (row.advancingTeamLogoUrl as string | null) ?? null,
-          advancingViaPenalties: Boolean(row.advancingViaPenalties),
-          nextRoundLabel: (row.nextRoundLabel as string) ?? null,
-          earnedPoints: row.earned_points ?? null,
-          earnedBreakdown: row.earned_breakdown ?? null
-        };
+        return mapCalendarMatchRow(row, availability, lockAt);
       })
     );
 
@@ -245,10 +210,12 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
         p.predicted_home_score,
         p.predicted_away_score,
         p.predicted_advancing_team_id,
+        ${predictionBracketSelectFields},
         ps.points AS earned_points,
         ps.breakdown AS earned_breakdown
       ${matchFromClause}
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $2
+      ${predictionBracketJoinClause}
       LEFT JOIN prediction_scores ps ON ps.source_type = 'MATCH' AND ps.source_id = m.id AND ps.user_id = $2
       WHERE ${activeTournamentCondition("m", 1)} AND m.stage = 'KNOCKOUT'
       ORDER BY
@@ -288,43 +255,7 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
       if (!byRound.has(key)) byRound.set(key, []);
       const lockAt = await resolvePredictionLockAt(row);
       const availability = await buildPredictionAvailability(row, lockAt, now, knockoutConfig);
-      byRound.get(key)!.push({
-        id: row.id,
-        stage: row.stage,
-        roundKey: key,
-        status: row.status,
-        startsAt: row.starts_at,
-        kickoffTimeLocal: row.kickoff_time_local,
-        roundLabel: row.round_label,
-        homeTeamId: Number(row.home_team_id),
-        homeTeamName: row.home_team_name,
-        homeTeamLogoUrl: row.home_team_logo_url,
-        awayTeamId: Number(row.away_team_id),
-        awayTeamName: row.away_team_name,
-        awayTeamLogoUrl: row.away_team_logo_url,
-        homeScore: row.home_score,
-        awayScore: row.away_score,
-        winnerTeamId: row.winner_team_id ? Number(row.winner_team_id) : null,
-        ...availability,
-        predictionLockAt: lockAt.toISOString(),
-        prediction:
-          row.predicted_home_score != null
-            ? {
-                predictedHomeScore: row.predicted_home_score,
-                predictedAwayScore: row.predicted_away_score,
-                predictedAdvancingTeamId: row.predicted_advancing_team_id
-                  ? Number(row.predicted_advancing_team_id)
-                  : null
-              }
-            : null,
-        advancingTeamId: row.advancingTeamId ? Number(row.advancingTeamId) : null,
-        advancingTeamName: (row.advancingTeamName as string) ?? null,
-        advancingTeamLogoUrl: (row.advancingTeamLogoUrl as string | null) ?? null,
-        advancingViaPenalties: Boolean(row.advancingViaPenalties),
-        nextRoundLabel: (row.nextRoundLabel as string) ?? null,
-        earnedPoints: row.earned_points ?? null,
-        earnedBreakdown: row.earned_breakdown ?? null
-      });
+      byRound.get(key)!.push(mapCalendarMatchRow(row, availability, lockAt));
     }
 
     res.json({

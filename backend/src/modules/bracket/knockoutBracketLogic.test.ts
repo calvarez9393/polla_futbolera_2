@@ -71,6 +71,21 @@ describe("resolveKnockoutBracketTeams", () => {
     expect(resolved.get(89)?.homeTeamId).toBe(A);
   });
 
+  it("usa clasificados reales en R16 y simula octavos desde predicción del usuario", () => {
+    const rows = [
+      koRow(1, 74, TBD, TBD, "NOT_STARTED"),
+      koRow(2, 89, TBD, TBD, "NOT_STARTED")
+    ];
+    const r16Official = new Map([[74, { homeTeamId: A, awayTeamId: B }]]);
+    const preds = new Map([
+      [1, { predicted_home_score: 0, predicted_away_score: 1, predicted_advancing_team_id: B }]
+    ]);
+    const resolved = resolveKnockoutBracketTeams(rows, preds, TBD, r16Official);
+    expect(resolved.get(74)?.homeTeamId).toBe(A);
+    expect(resolved.get(74)?.awayTeamId).toBe(B);
+    expect(resolved.get(89)?.homeTeamId).toBe(B);
+  });
+
   it("no sobrescribe el cuadro del usuario con resultado oficial", () => {
     const rows = [
       koRow(1, 74, A, B, "FINISHED", {

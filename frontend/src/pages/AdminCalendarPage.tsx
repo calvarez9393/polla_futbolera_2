@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AdminSubnav } from "../components/AdminSubnav";
+import { ExclusiveAccordion } from "../components/ExclusiveAccordion";
 import { InfoModal, PageTitle, SectionTitle } from "../components/InfoModal";
 import { DateNavigator, type MatchDateRow } from "../components/DateNavigator";
 import { MatchParticipantsPanel } from "../components/MatchParticipantsPanel";
@@ -410,44 +411,50 @@ export function AdminCalendarPage() {
                 </div>
               )}
 
-              {filteredKoByRound.map((round) => {
-                const roundCounts = countMatches(round.matches);
-                return (
-                  <div key={round.roundKey} className="admin-ko-round-block">
-                    <header className="admin-ko-round-head">
-                      <div>
-                        <h3 className="admin-ko-round-title">{round.title}</h3>
-                        <p className="admin-ko-round-meta">
+              {filteredKoByRound.length > 0 && (
+                <ExclusiveAccordion
+                  className="admin-ko-accordion"
+                  items={filteredKoByRound.map((round) => {
+                    const roundCounts = countMatches(round.matches);
+                    return {
+                      id: round.roundKey,
+                      title: round.title,
+                      meta: (
+                        <>
                           {round.matches.length} partido{round.matches.length === 1 ? "" : "s"}
                           {roundCounts.pending > 0 && (
                             <span className="admin-ko-round-pending">
+                              {" "}
                               · {roundCounts.pending} sin resultado
                             </span>
                           )}
                           {roundCounts.pending === 0 && roundCounts.all > 0 && (
                             <span className="admin-ko-round-done"> · completo</span>
                           )}
-                        </p>
-                      </div>
-                      {roundCounts.pending > 0 && (
-                        <span className="badge badge-scheduled admin-ko-round-badge">
-                          {roundCounts.pending} pendiente{roundCounts.pending === 1 ? "" : "s"}
-                        </span>
-                      )}
-                    </header>
-                    <div className="admin-match-list">
-                      {round.matches.map((match) => (
-                        <AdminMatchCard
-                          key={match.id}
-                          match={match}
-                          onSaved={onKnockoutSaved}
-                          highlightKnockout
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                        </>
+                      ),
+                      badge:
+                        roundCounts.pending > 0 ? (
+                          <span className="badge badge-scheduled admin-ko-round-badge">
+                            {roundCounts.pending} pendiente{roundCounts.pending === 1 ? "" : "s"}
+                          </span>
+                        ) : null,
+                      children: (
+                        <div className="admin-match-list">
+                          {round.matches.map((match) => (
+                            <AdminMatchCard
+                              key={match.id}
+                              match={match}
+                              onSaved={onKnockoutSaved}
+                              highlightKnockout
+                            />
+                          ))}
+                        </div>
+                      )
+                    };
+                  })}
+                />
+              )}
             </>
           )}
         </section>

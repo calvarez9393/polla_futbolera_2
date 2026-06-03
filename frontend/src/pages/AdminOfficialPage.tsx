@@ -161,9 +161,35 @@ export function AdminOfficialPage() {
 
   async function runCalc(kind: string, path: string) {
     try {
-      const r = await api<Record<string, number>>(path, { method: "POST" });
+      const r = await api<Record<string, unknown>>(path, { method: "POST" });
       setIsError(false);
-      setMessage(`${kind}: ${JSON.stringify(r)}`);
+      if (path.includes("calculate-bonuses") && Array.isArray(r.finalistComparisons)) {
+        const lines = [
+          `${kind}: ${r.usersScored} usuarios puntuados`,
+          `Finalistas oficiales: ${(r.officialFinalists as { names: string[] })?.names?.join(", ") || "—"}`
+        ];
+        for (const cmp of r.finalistComparisons as Array<{
+          userLabel: string;
+          predictedNames: string[];
+          officialNames: string[];
+          hits: number;
+          exactMatch: boolean;
+          points: number;
+          hasPrediction: boolean;
+        }>) {
+          if (!cmp.hasPrediction) {
+            lines.push(`${cmp.userLabel}: sin predicción de finalistas → omitido`);
+            continue;
+          }
+          const status = cmp.exactMatch ? "IGUAL" : cmp.hits > 0 ? "PARCIAL" : "SIN ACERTOS";
+          lines.push(
+            `${cmp.userLabel}: [${cmp.predictedNames.join(", ")}] vs [${cmp.officialNames.join(", ")}] → ${status} (+${cmp.points} pts)`
+          );
+        }
+        setMessage(lines.join("\n"));
+      } else {
+        setMessage(`${kind}: ${JSON.stringify(r)}`);
+      }
       await load();
     } catch (err) {
       setIsError(true);
@@ -181,7 +207,14 @@ export function AdminOfficialPage() {
         Resultados oficiales
       </PageTitle>
 
-      {message && <div className={`alert ${isError ? "alert-error" : "alert-success"}`}>{message}</div>}
+      {message && (
+        <div
+          className={`alert ${isError ? "alert-error" : "alert-success"}`}
+          style={message.includes("\n") ? { whiteSpace: "pre-wrap" } : undefined}
+        >
+          {message}
+        </div>
+      )}
 
       {loading ? (
         <div className="panel-card empty-state">

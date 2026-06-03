@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageTitle } from "../components/InfoModal";
+import { ExclusiveAccordion } from "../components/ExclusiveAccordion";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { PredictionMatchCard, type CalendarPredictionMatch } from "../components/PredictionMatchCard";
 import { api } from "../lib/api";
@@ -25,10 +26,15 @@ export function BracketPage() {
     closeDate: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [openRoundKey, setOpenRoundKey] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const initialOpenSet = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const data = await api<{
         rounds: BracketRound[];
@@ -37,11 +43,16 @@ export function BracketPage() {
       setRounds(data.rounds);
       setGlobalWindow(data.knockoutGlobalWindow ?? null);
       setError("");
+      if (!initialOpenSet.current && data.rounds.length > 0) {
+        setOpenRoundKey(data.rounds[0].roundKey);
+        initialOpenSet.current = true;
+      }
     } catch (e) {
       setError((e as Error).message);
-      setRounds([]);
+      if (!silent) setRounds([]);
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -58,7 +69,11 @@ export function BracketPage() {
   }, [load]);
 
   async function onMatchSaved() {
-    await load();
+    const scrollY = window.scrollY;
+    await load({ silent: true });
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
     try {
       await api("/predictions/me/bonuses");
     } catch {
@@ -72,6 +87,10 @@ export function BracketPage() {
         helpTitle="Eliminatorias"
         help={
           <>
+            <p>
+              <strong>Dieciseisavos:</strong> los cruces parten de los equipos que clasificaron realmente (resultados
+              oficiales de grupos). Desde octavos, tu simulación avanza según tus marcadores y quién elijas que pasa.
+            </p>
             <p>
               <strong>Fase 1:</strong> grupos y dieciseisavos — ganador/empate (+3), diferencia (+2), exacto (+5).
               En fase de grupos puedes predecir empate sin elegir ganador. Desde octavos, en empate debes indicar
@@ -116,44 +135,65 @@ export function BracketPage() {
         </div>
       )}
 
-      {rounds.map((round) => (
-        <section key={round.roundKey} style={{ marginBottom: "2rem" }}>
-          <h2 className="page-title" style={{ fontSize: "1.15rem", marginBottom: "0.75rem" }}>
-            {round.title}
-          </h2>
-          {round.predictionWindow && (
-            <p
-              className={`admin-block-hint${round.predictionWindow.isOpen ? "" : " prediction-card-msg--error"}`}
-              style={{ marginTop: 0, marginBottom: "0.75rem" }}
-            >
-              {round.predictionWindow.isOpen ? (
-                <>
-                  Ventana abierta:{" "}
-                  {formatPredictionWindowRange(
-                    round.predictionWindow.openDate,
-                    round.predictionWindow.closeDate
-                  )}
-                  .
-                </>
-              ) : (
-                <>
-                  Fuera de ventana (
-                  {formatPredictionWindowRange(
-                    round.predictionWindow.openDate,
-                    round.predictionWindow.closeDate
-                  )}
-                  ).
-                </>
-              )}
+      {!loading && rounds.length > 0 && (
+        <>
+          {refreshing && (
+            <p className="bracket-refresh-hint" aria-live="polite">
+              Actualizando cuadro…
             </p>
           )}
-          <div className="match-grid">
-            {round.matches.map((match) => (
-              <PredictionMatchCard key={match.id} match={match} onSaved={onMatchSaved} />
-            ))}
-          </div>
-        </section>
-      ))}
+          <ExclusiveAccordion
+            openId={openRoundKey}
+            onOpenIdChange={setOpenRoundKey}
+            items={rounds.map((round) => ({
+            id: round.roundKey,
+            title: round.title,
+            meta: `${round.matches.length} partido${round.matches.length === 1 ? "" : "s"}`,
+            badge:
+              round.predictionWindow && !round.predictionWindow.isOpen ? (
+                <span className="badge badge-scheduled">Cerrada</span>
+              ) : round.predictionWindow?.isOpen ? (
+                <span className="badge badge-finished">Abierta</span>
+              ) : null,
+            children: (
+              <>
+                {round.predictionWindow && (
+                  <p
+                    className={`admin-block-hint${round.predictionWindow.isOpen ? "" : " prediction-card-msg--error"}`}
+                    style={{ marginTop: 0, marginBottom: "0.75rem" }}
+                  >
+                    {round.predictionWindow.isOpen ? (
+                      <>
+                        Ventana abierta:{" "}
+                        {formatPredictionWindowRange(
+                          round.predictionWindow.openDate,
+                          round.predictionWindow.closeDate
+                        )}
+                        .
+                      </>
+                    ) : (
+                      <>
+                        Fuera de ventana (
+                        {formatPredictionWindowRange(
+                          round.predictionWindow.openDate,
+                          round.predictionWindow.closeDate
+                        )}
+                        ).
+                      </>
+                    )}
+                  </p>
+                )}
+                <div className="match-grid">
+                  {round.matches.map((match) => (
+                    <PredictionMatchCard key={match.id} match={match} onSaved={onMatchSaved} />
+                  ))}
+                </div>
+              </>
+            )
+          }))}
+          />
+        </>
+      )}
     </>
   );
 }

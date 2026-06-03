@@ -157,19 +157,27 @@ export async function applyResolvedTeamsToMatchRows(
   const tbdId = await getTbdTeamId();
   const knockRows = allRows.map(toKnockoutMatchRow);
   const matchIds = knockRows.map((r) => r.id);
-  const preds = await loadPredictionsMap(userId, matchIds);
-  const resolved = resolveKnockoutBracketTeams(knockRows, preds, tbdId);
+  const { resolveUserKnockoutBracketTeams } = await import("./resolveUserKnockoutBracket.js");
+  const resolved = await resolveUserKnockoutBracketTeams(userId, tournamentId);
   const { loadUserBracketSnapshotsForMatches } = await import("./resolveUserSlotTeams.js");
   const snapshots = await loadUserBracketSnapshotsForMatches(userId, matchIds);
 
   const teamIds: number[] = [];
   for (const row of displayKoRows) {
+    row.official_home_team_id = row.home_team_id;
+    row.official_away_team_id = row.away_team_id;
+    row.official_home_team_name = row.home_team_name;
+    row.official_away_team_name = row.away_team_name;
+    row.official_home_team_logo_url = row.home_team_logo_url;
+    row.official_away_team_logo_url = row.away_team_logo_url;
+
     const matchId = Number(row.id);
     const snap = snapshots.get(matchId);
     const num = knockoutExternalNum(row.external_id as string);
     const slot = num != null ? resolved.get(num) : undefined;
-    const homeTeamId = snap?.homeTeamId ?? slot?.homeTeamId;
-    const awayTeamId = snap?.awayTeamId ?? slot?.awayTeamId;
+    const isR16 = row.round_key === "R16";
+    const homeTeamId = isR16 ? slot?.homeTeamId : (snap?.homeTeamId ?? slot?.homeTeamId);
+    const awayTeamId = isR16 ? slot?.awayTeamId : (snap?.awayTeamId ?? slot?.awayTeamId);
     if (homeTeamId == null || awayTeamId == null) continue;
     row.home_team_id = homeTeamId;
     row.away_team_id = awayTeamId;
@@ -254,7 +262,7 @@ export async function enrichKnockoutAdvancingOnRows(
 
   const resolved =
     userId != null
-      ? resolveKnockoutBracketTeams(knockRows, preds, tbdId)
+      ? await (await import("./resolveUserKnockoutBracket.js")).resolveUserKnockoutBracketTeams(userId)
       : new Map<number, { homeTeamId: number; awayTeamId: number }>();
 
   const snapshots =
@@ -278,33 +286,54 @@ export async function enrichKnockoutAdvancingOnRows(
     const homeId = snap?.homeTeamId ?? slot?.homeTeamId ?? ko.home_team_id;
     const awayId = snap?.awayTeamId ?? slot?.awayTeamId ?? ko.away_team_id;
 
-    const advId =
-      userId != null
+    const officialHome = Number(row.official_home_team_id ?? ko.home_team_id);
+    const officialAway = Number(row.official_away_team_id ?? ko.away_team_id);
+
+    const predAdvId =
+      userId != null && pred != null
         ? matchOutcomeFromPrediction(pred, homeId, awayId, tbdId).winnerId
-        : matchOutcomeOfficial(ko, homeId, awayId, tbdId).winnerId;
+        : null;
 
-    const homeScore =
-      ko.status === "FINISHED" ? ko.home_score : pred?.predicted_home_score ?? null;
-    const awayScore =
-      ko.status === "FINISHED" ? ko.away_score : pred?.predicted_away_score ?? null;
-    const isDraw = homeScore != null && awayScore != null && homeScore === awayScore;
+    let officialAdvId: number | null = null;
+    if (ko.status === "FINISHED") {
+      officialAdvId = matchOutcomeOfficial(ko, officialHome, officialAway, tbdId).winnerId;
+    }
 
-    row.advancingTeamId = advId;
-    row.advancingViaPenalties = Boolean(
-      advId && isDraw && (ko.status === "FINISHED" || pred != null)
-    );
+    const predHome = pred?.predicted_home_score ?? null;
+    const predAway = pred?.predicted_away_score ?? null;
+    const predIsDraw = predHome != null && predAway != null && predHome === predAway;
+    const officialIsDraw =
+      ko.status === "FINISHED" &&
+      ko.home_score != null &&
+      ko.away_score != null &&
+      ko.home_score === ko.away_score;
+
+    row.advancingTeamId = predAdvId;
+    row.advancingViaPenalties = Boolean(predAdvId && predIsDraw);
+    row.officialAdvancingTeamId = officialAdvId;
+    row.officialAdvancingViaPenalties = Boolean(officialAdvId && officialIsDraw);
     row.nextRoundLabel = nextRoundKeyLabel(row.round_key as string | undefined);
-    if (advId) teamIds.push(advId);
+    if (predAdvId) teamIds.push(predAdvId);
+    if (officialAdvId) teamIds.push(officialAdvId);
   }
 
   const names = await loadTeamNames(teamIds);
   for (const row of koRows) {
-    const id = row.advancingTeamId as number | undefined;
-    if (!id) continue;
-    const t = names.get(id);
-    if (t) {
-      row.advancingTeamName = t.name;
-      row.advancingTeamLogoUrl = t.logoUrl;
+    const predId = row.advancingTeamId as number | undefined;
+    if (predId) {
+      const t = names.get(predId);
+      if (t) {
+        row.advancingTeamName = t.name;
+        row.advancingTeamLogoUrl = t.logoUrl;
+      }
+    }
+    const officialId = row.officialAdvancingTeamId as number | undefined;
+    if (officialId) {
+      const t = names.get(officialId);
+      if (t) {
+        row.officialAdvancingTeamName = t.name;
+        row.officialAdvancingTeamLogoUrl = t.logoUrl;
+      }
     }
   }
 }

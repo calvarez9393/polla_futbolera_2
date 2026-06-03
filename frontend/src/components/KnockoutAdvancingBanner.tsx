@@ -6,6 +6,7 @@ interface KnockoutAdvancingBannerProps {
   nextRoundLabel: string;
   viaPenalties?: boolean;
   compact?: boolean;
+  kind?: "prediction" | "official";
 }
 
 export function KnockoutAdvancingBanner({
@@ -13,11 +14,19 @@ export function KnockoutAdvancingBanner({
   logoUrl,
   nextRoundLabel,
   viaPenalties = false,
-  compact = false
+  compact = false,
+  kind = "prediction"
 }: KnockoutAdvancingBannerProps) {
+  const label =
+    kind === "official"
+      ? `Pasa de verdad a ${nextRoundLabel}`
+      : `Tu predicción — pasa a ${nextRoundLabel}`;
+
   return (
-    <p className={`knockout-advancing-banner${compact ? " knockout-advancing-banner--compact" : ""}`}>
-      <span className="knockout-advancing-label">Pasa a {nextRoundLabel}:</span>
+    <p
+      className={`knockout-advancing-banner knockout-advancing-banner--${kind}${compact ? " knockout-advancing-banner--compact" : ""}`}
+    >
+      <span className="knockout-advancing-label">{label}:</span>
       <span className="knockout-advancing-team">
         <TeamFlag name={teamName} logoUrl={logoUrl} size="sm" />
         <strong>{teamName}</strong>
