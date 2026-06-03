@@ -27,7 +27,7 @@ const previewSchema = z.object({
 export const adminCalendarRouter = Router();
 adminCalendarRouter.use(requireAuth, requireAdmin);
 
-async function mapCalendarRows(rows: Awaited<ReturnType<typeof pool.query>>["rows"]) {
+async function mapCalendarRows(rows: any[]) {
   return Promise.all(
     rows.map(async (row) => {
       const lockAt = await resolvePredictionLockAt(row);
