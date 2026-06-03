@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { InfoModal, PageTitle, SectionTitle } from "../components/InfoModal";
+import { PageTitle, SectionTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
 import { PointsChips } from "../components/PointsChips";
 import { TeamFlag } from "../components/TeamFlag";

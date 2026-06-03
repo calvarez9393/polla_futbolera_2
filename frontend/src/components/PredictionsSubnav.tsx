@@ -1,10 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { InfoModal } from "./InfoModal";
 
-const predictionLinks = [
+const predictionLinks: { to: string; label: string; end?: boolean }[] = [
   { to: "/predictions", label: "Partidos", end: true },
   { to: "/predictions/bracket", label: "Eliminatorias" }
-] as const;
+];
 
 const statsLinks = [
   { to: "/predictions/qualifiers", label: "Cuadro de 32" },

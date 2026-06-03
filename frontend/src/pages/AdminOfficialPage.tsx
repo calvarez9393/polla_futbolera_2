@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AdminSubnav } from "../components/AdminSubnav";
-import { InfoModal, PageTitle, SectionTitle } from "../components/InfoModal";
+import { PageTitle, SectionTitle } from "../components/InfoModal";
 import { AdminR16BracketEditor } from "../components/AdminR16BracketEditor";
 import { TeamFlag } from "../components/TeamFlag";
 import { api } from "../lib/api";
