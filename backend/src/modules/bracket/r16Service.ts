@@ -151,6 +151,23 @@ function enrichFixtureMeta(
   };
 }
 
+export async function getUserR16SlotTeamIds(
+  userId: number,
+  externalNum: number
+): Promise<{ homeTeamId: number; awayTeamId: number } | null> {
+  const tbdId = await getTbdTeamId();
+  const { computeUserQualifiersFromPredictions } = await import("../qualifiers/fromPredictions.js");
+  const fifa = await computeUserQualifiersFromPredictions(userId);
+  const poolData = poolFromFifa(fifa, tbdId);
+  const resolved = resolveR16FromPool(WC2026_R16_FIXTURES, poolData, new Map());
+  const fx = WC2026_R16_FIXTURES.find((f) => f.externalNum === externalNum);
+  if (!fx) return null;
+  const slot = resolved.find((r) => r.matchNumber === fx.matchNumber);
+  if (!slot?.homeTeamId || !slot?.awayTeamId) return null;
+  if (slot.homeTeamId === tbdId || slot.awayTeamId === tbdId) return null;
+  return { homeTeamId: slot.homeTeamId, awayTeamId: slot.awayTeamId };
+}
+
 export function resolveR16FromPool(
   fixtures: R16FixtureDef[],
   pool: QualifierPool,

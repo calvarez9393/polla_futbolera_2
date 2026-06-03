@@ -1,11 +1,13 @@
 import {
   knockoutExternalNum,
-  matchOutcome,
+  matchOutcomeFromPrediction,
+  matchOutcomeOfficial,
   resolveKnockoutBracketTeams,
   type KnockoutMatchRow,
   type UserPredictionRow
 } from "./knockoutBracketLogic.js";
 
+/** Quién avanza según el cuadro predicho del usuario (equipos ya resueltos de su bracket). */
 export function resolveKnockoutAdvancingTeamId(
   match: KnockoutMatchRow,
   prediction: UserPredictionRow | null | undefined,
@@ -13,7 +15,17 @@ export function resolveKnockoutAdvancingTeamId(
   awayTeamId: number,
   tbdId: number
 ): number | null {
-  return matchOutcome(match, prediction, homeTeamId, awayTeamId, tbdId).winnerId;
+  return matchOutcomeFromPrediction(prediction, homeTeamId, awayTeamId, tbdId).winnerId;
+}
+
+/** Quién avanzó según resultado oficial. */
+export function resolveOfficialKnockoutAdvancingTeamId(
+  match: KnockoutMatchRow,
+  homeTeamId: number,
+  awayTeamId: number,
+  tbdId: number
+): number | null {
+  return matchOutcomeOfficial(match, homeTeamId, awayTeamId, tbdId).winnerId;
 }
 
 export function resolvePredictionAdvancingTeamId(

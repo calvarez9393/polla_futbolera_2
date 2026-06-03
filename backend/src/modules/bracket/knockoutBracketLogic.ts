@@ -61,8 +61,8 @@ export function knockoutExternalNum(externalId: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-export function matchOutcome(
-  row: KnockoutMatchRow,
+/** Ganador según el cuadro predicho del usuario (ignora resultado oficial). */
+export function matchOutcomeFromPrediction(
   prediction: UserPredictionRow | null | undefined,
   resolvedHomeId: number,
   resolvedAwayId: number,
@@ -71,20 +71,6 @@ export function matchOutcome(
   const home = Number(resolvedHomeId);
   const away = Number(resolvedAwayId);
   if (home === tbdId || away === tbdId) {
-    return { winnerId: null, loserId: null };
-  }
-
-  if (row.status === "FINISHED") {
-    if (row.winner_team_id && Number(row.winner_team_id) !== tbdId) {
-      const winnerId = Number(row.winner_team_id);
-      const loserId = winnerId === home ? away : home;
-      return { winnerId, loserId };
-    }
-    if (row.home_score != null && row.away_score != null && row.home_score !== row.away_score) {
-      const winnerId = row.home_score > row.away_score ? home : away;
-      const loserId = winnerId === home ? away : home;
-      return { winnerId, loserId };
-    }
     return { winnerId: null, loserId: null };
   }
 
@@ -103,6 +89,50 @@ export function matchOutcome(
   }
 
   return { winnerId: null, loserId: null };
+}
+
+/** Ganador según resultado oficial (calendario real y propagación en BD). */
+export function matchOutcomeOfficial(
+  row: KnockoutMatchRow,
+  resolvedHomeId: number,
+  resolvedAwayId: number,
+  tbdId: number
+): { winnerId: number | null; loserId: number | null } {
+  const home = Number(resolvedHomeId);
+  const away = Number(resolvedAwayId);
+  if (home === tbdId || away === tbdId) {
+    return { winnerId: null, loserId: null };
+  }
+
+  if (row.status !== "FINISHED") {
+    return { winnerId: null, loserId: null };
+  }
+
+  if (row.winner_team_id && Number(row.winner_team_id) !== tbdId) {
+    const winnerId = Number(row.winner_team_id);
+    const loserId = winnerId === home ? away : home;
+    return { winnerId, loserId };
+  }
+  if (row.home_score != null && row.away_score != null && row.home_score !== row.away_score) {
+    const winnerId = row.home_score > row.away_score ? home : away;
+    const loserId = winnerId === home ? away : home;
+    return { winnerId, loserId };
+  }
+  return { winnerId: null, loserId: null };
+}
+
+/** @deprecated Usar matchOutcomeFromPrediction o matchOutcomeOfficial según el caso. */
+export function matchOutcome(
+  row: KnockoutMatchRow,
+  prediction: UserPredictionRow | null | undefined,
+  resolvedHomeId: number,
+  resolvedAwayId: number,
+  tbdId: number
+): { winnerId: number | null; loserId: number | null } {
+  if (prediction != null) {
+    return matchOutcomeFromPrediction(prediction, resolvedHomeId, resolvedAwayId, tbdId);
+  }
+  return matchOutcomeOfficial(row, resolvedHomeId, resolvedAwayId, tbdId);
 }
 
 function teamFromFeed(
@@ -139,8 +169,7 @@ export function resolveKnockoutBracketTeams(
         const feederResolved = resolved.get(feeds.home.matchNum);
         const feederHome = feederResolved?.homeTeamId ?? feeder.home_team_id;
         const feederAway = feederResolved?.awayTeamId ?? feeder.away_team_id;
-        const outcome = matchOutcome(
-          feeder,
+        const outcome = matchOutcomeFromPrediction(
           predictionsByMatchId.get(feeder.id),
           feederHome,
           feederAway,
@@ -157,13 +186,63 @@ export function resolveKnockoutBracketTeams(
         const feederResolved = resolved.get(feeds.away.matchNum);
         const feederHome = feederResolved?.homeTeamId ?? feeder.home_team_id;
         const feederAway = feederResolved?.awayTeamId ?? feeder.away_team_id;
-        const outcome = matchOutcome(
-          feeder,
+        const outcome = matchOutcomeFromPrediction(
           predictionsByMatchId.get(feeder.id),
           feederHome,
           feederAway,
           tbdId
         );
+        const picked = teamFromFeed(feeds.away, outcome);
+        if (picked && picked !== tbdId) awayTeamId = picked;
+      }
+    }
+
+    resolved.set(num, { homeTeamId: Number(homeTeamId), awayTeamId: Number(awayTeamId) });
+  }
+
+  return resolved;
+}
+
+/** Cuadro real del torneo (solo resultados oficiales en cada llave). */
+export function resolveOfficialKnockoutBracketTeams(
+  rows: KnockoutMatchRow[],
+  tbdId: number
+): Map<number, { homeTeamId: number; awayTeamId: number }> {
+  const byNum = new Map<number, KnockoutMatchRow>();
+  for (const row of rows) {
+    const num = knockoutExternalNum(row.external_id);
+    if (num != null) byNum.set(num, row);
+  }
+
+  const resolved = new Map<number, { homeTeamId: number; awayTeamId: number }>();
+
+  for (const num of KNOCKOUT_MATCH_ORDER) {
+    const row = byNum.get(num);
+    if (!row) continue;
+
+    const feeds = KNOCKOUT_SLOT_FEEDS[num];
+    let homeTeamId = row.home_team_id;
+    let awayTeamId = row.away_team_id;
+
+    if (feeds?.home) {
+      const feeder = byNum.get(feeds.home.matchNum);
+      if (feeder) {
+        const feederResolved = resolved.get(feeds.home.matchNum);
+        const feederHome = feederResolved?.homeTeamId ?? feeder.home_team_id;
+        const feederAway = feederResolved?.awayTeamId ?? feeder.away_team_id;
+        const outcome = matchOutcomeOfficial(feeder, feederHome, feederAway, tbdId);
+        const picked = teamFromFeed(feeds.home, outcome);
+        if (picked && picked !== tbdId) homeTeamId = picked;
+      }
+    }
+
+    if (feeds?.away) {
+      const feeder = byNum.get(feeds.away.matchNum);
+      if (feeder) {
+        const feederResolved = resolved.get(feeds.away.matchNum);
+        const feederHome = feederResolved?.homeTeamId ?? feeder.home_team_id;
+        const feederAway = feederResolved?.awayTeamId ?? feeder.away_team_id;
+        const outcome = matchOutcomeOfficial(feeder, feederHome, feederAway, tbdId);
         const picked = teamFromFeed(feeds.away, outcome);
         if (picked && picked !== tbdId) awayTeamId = picked;
       }

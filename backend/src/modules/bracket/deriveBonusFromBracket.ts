@@ -7,10 +7,17 @@ import {
 } from "./knockoutAdvancement.js";
 import {
   knockoutExternalNum,
+  matchOutcomeOfficial,
   resolveKnockoutBracketTeams,
+  resolveOfficialKnockoutBracketTeams,
   type KnockoutMatchRow,
   type UserPredictionRow
 } from "./knockoutBracketLogic.js";
+import {
+  getOfficialBonusResults,
+  setOfficialBonusResults,
+  type OfficialBonusResults
+} from "../scoring/bonuses.js";
 import { resolveKnockoutAdvancingTeamId } from "./knockoutAdvancingResolve.js";
 
 export interface DerivedBracketBonusPicks {
@@ -214,4 +221,159 @@ export async function syncUserBonusPicksFromBracket(userId: number): Promise<Der
   );
 
   return derived;
+}
+
+function advancingFromOfficial(
+  match: KnockoutMatchRow,
+  homeId: number,
+  awayId: number,
+  tbdId: number
+): number | null {
+  return matchOutcomeOfficial(match, homeId, awayId, tbdId).winnerId;
+}
+
+/** Campeón, finalistas, etc. según resultados reales del torneo. */
+export function buildOfficialBracketBonusPicks(
+  rows: KnockoutMatchRow[],
+  roundByMatchId: Map<number, string>,
+  resolved: Map<number, { homeTeamId: number; awayTeamId: number }>,
+  tbdId: number
+): DerivedBracketBonusPicks {
+  const teamsInRound = (roundKey: string): number[] => {
+    const ids: number[] = [];
+    for (const row of rows) {
+      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
+      const num = knockoutExternalNum(row.external_id);
+      if (num == null) continue;
+      const slot = resolved.get(num);
+      if (!slot) continue;
+      ids.push(slot.homeTeamId, slot.awayTeamId);
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const advancingWinnersInRound = (roundKey: string): number[] => {
+    const ids: number[] = [];
+    for (const row of rows) {
+      if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
+      const num = knockoutExternalNum(row.external_id);
+      if (num == null) continue;
+      const slot = resolved.get(num);
+      if (!slot) continue;
+      const adv = advancingFromOfficial(row, slot.homeTeamId, slot.awayTeamId, tbdId);
+      if (adv) ids.push(adv);
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const mergeRounds = (...roundKeys: string[]): number[] => {
+    const ids: number[] = [];
+    for (const key of roundKeys) {
+      ids.push(...teamsInRound(key), ...advancingWinnersInRound(key));
+    }
+    return uniqueValidTeamIds(ids, tbdId);
+  };
+
+  const semifinalistTeamIds = mergeRounds("SF", "R4");
+  const finalistTeamIds = mergeRounds("F", "SF");
+
+  let championTeamId: number | null = null;
+  let runnerUpTeamId: number | null = null;
+  let thirdPlaceTeamId: number | null = null;
+
+  for (const row of rows) {
+    const round = roundByMatchId.get(Number(row.id))?.toUpperCase();
+    const num = knockoutExternalNum(row.external_id);
+    if (num == null) continue;
+    const slot = resolved.get(num);
+    if (!slot) continue;
+
+    const homeId = Number(slot.homeTeamId);
+    const awayId = Number(slot.awayTeamId);
+    const adv = advancingFromOfficial(row, homeId, awayId, tbdId);
+    if (!adv) continue;
+
+    if (round === "F") {
+      championTeamId = adv;
+      const other = homeId === adv ? awayId : homeId;
+      runnerUpTeamId = other !== tbdId ? other : null;
+    } else if (round === "TP3") {
+      thirdPlaceTeamId = adv;
+    }
+  }
+
+  const finalWinners = advancingWinnersInRound("F");
+  if (!championTeamId && finalWinners.length === 1) {
+    championTeamId = finalWinners[0];
+  }
+
+  return {
+    championTeamId,
+    runnerUpTeamId,
+    thirdPlaceTeamId,
+    semifinalistTeamIds: semifinalistTeamIds.slice(0, 4),
+    finalistTeamIds: finalistTeamIds.slice(0, 2)
+  };
+}
+
+export async function deriveOfficialBonusFromRealBracket(
+  tournamentId: number
+): Promise<DerivedBracketBonusPicks> {
+  const empty: DerivedBracketBonusPicks = {
+    championTeamId: null,
+    runnerUpTeamId: null,
+    thirdPlaceTeamId: null,
+    semifinalistTeamIds: [],
+    finalistTeamIds: []
+  };
+
+  const rows = await loadKnockoutRowsForTournament(tournamentId);
+  if (rows.length === 0) return empty;
+
+  const tbdId = await getTbdTeamId();
+  const resolved = resolveOfficialKnockoutBracketTeams(rows, tbdId);
+
+  const roundByMatchId = new Map<number, string>();
+  const roundRows = await pool.query(
+    `SELECT id, round_key FROM matches WHERE tournament_id = $1 AND stage = 'KNOCKOUT'`,
+    [tournamentId]
+  );
+  for (const r of roundRows.rows) {
+    roundByMatchId.set(Number(r.id), String(r.round_key ?? ""));
+  }
+
+  return buildOfficialBracketBonusPicks(rows, roundByMatchId, resolved, tbdId);
+}
+
+/** Actualiza resultados oficiales de bonos (finalistas reales) y puntúa vs cuadro de cada usuario. */
+export async function syncOfficialBonusResultsAndScore(): Promise<{
+  official: OfficialBonusResults;
+  usersScored: number;
+}> {
+  const tournamentId = await getActiveTournamentId();
+  if (!tournamentId) {
+    return { official: {}, usersScored: 0 };
+  }
+
+  const derived = await deriveOfficialBonusFromRealBracket(tournamentId);
+  const prev = await getOfficialBonusResults();
+  const official: OfficialBonusResults = {
+    ...prev,
+    championTeamId: derived.championTeamId,
+    runnerUpTeamId: derived.runnerUpTeamId,
+    thirdPlaceTeamId: derived.thirdPlaceTeamId,
+    semifinalistTeamIds: derived.semifinalistTeamIds,
+    finalistTeamIds: derived.finalistTeamIds
+  };
+  await setOfficialBonusResults(official);
+
+  const users = await pool.query(`SELECT id FROM users WHERE role = 'USER'`);
+  for (const u of users.rows) {
+    await syncUserBonusPicksFromBracket(Number(u.id));
+  }
+
+  const { calculateBonusScores } = await import("../scoring/bonuses.js");
+  const { usersScored } = await calculateBonusScores();
+
+  return { official, usersScored };
 }

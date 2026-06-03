@@ -114,7 +114,10 @@ adminScoringRouter.put("/official/bonuses", async (req, res, next) => {
 
 adminScoringRouter.post("/scoring/calculate-bonuses", async (_req, res, next) => {
   try {
-    const result = await calculateBonusScores();
+    const { syncOfficialBonusResultsAndScore } = await import(
+      "../bracket/deriveBonusFromBracket.js"
+    );
+    const result = await syncOfficialBonusResultsAndScore();
     res.json(result);
   } catch (error) {
     next(error);

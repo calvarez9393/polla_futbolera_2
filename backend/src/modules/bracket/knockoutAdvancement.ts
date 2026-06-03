@@ -5,12 +5,12 @@ import {
   knockoutExternalNum,
   KNOCKOUT_MATCH_ORDER,
   matchOutcome,
+  matchOutcomeFromPrediction,
+  matchOutcomeOfficial,
   resolveKnockoutBracketTeams,
   type KnockoutMatchRow,
   type UserPredictionRow
 } from "./knockoutBracketLogic.js";
-import { resolveKnockoutAdvancingTeamId } from "./knockoutAdvancingResolve.js";
-
 export type {
   FeedType,
   KnockoutMatchRow,
@@ -22,6 +22,8 @@ export {
   KNOCKOUT_SLOT_FEEDS,
   knockoutExternalNum,
   matchOutcome,
+  matchOutcomeFromPrediction,
+  matchOutcomeOfficial,
   parseSlotFeed,
   resolveKnockoutBracketTeams
 } from "./knockoutBracketLogic.js";
@@ -46,7 +48,12 @@ export async function propagateOfficialKnockoutAdvancement(matchId: number): Pro
   if (feederNum == null) return 0;
 
   const tbdId = await getTbdTeamId();
-  const { winnerId, loserId } = matchOutcome(match, null, match.home_team_id, match.away_team_id, tbdId);
+  const { winnerId, loserId } = matchOutcomeOfficial(
+    match,
+    match.home_team_id,
+    match.away_team_id,
+    tbdId
+  );
   if (!winnerId) return 0;
 
   if (!match.winner_team_id || match.winner_team_id === tbdId) {
@@ -149,21 +156,24 @@ export async function applyResolvedTeamsToMatchRows(
 
   const tbdId = await getTbdTeamId();
   const knockRows = allRows.map(toKnockoutMatchRow);
-  const preds = await loadPredictionsMap(
-    userId,
-    knockRows.map((r) => r.id)
-  );
+  const matchIds = knockRows.map((r) => r.id);
+  const preds = await loadPredictionsMap(userId, matchIds);
   const resolved = resolveKnockoutBracketTeams(knockRows, preds, tbdId);
+  const { loadUserBracketSnapshotsForMatches } = await import("./resolveUserSlotTeams.js");
+  const snapshots = await loadUserBracketSnapshotsForMatches(userId, matchIds);
 
   const teamIds: number[] = [];
   for (const row of displayKoRows) {
+    const matchId = Number(row.id);
+    const snap = snapshots.get(matchId);
     const num = knockoutExternalNum(row.external_id as string);
-    if (num == null) continue;
-    const slot = resolved.get(num);
-    if (!slot) continue;
-    row.home_team_id = slot.homeTeamId;
-    row.away_team_id = slot.awayTeamId;
-    teamIds.push(slot.homeTeamId, slot.awayTeamId);
+    const slot = num != null ? resolved.get(num) : undefined;
+    const homeTeamId = snap?.homeTeamId ?? slot?.homeTeamId;
+    const awayTeamId = snap?.awayTeamId ?? slot?.awayTeamId;
+    if (homeTeamId == null || awayTeamId == null) continue;
+    row.home_team_id = homeTeamId;
+    row.away_team_id = awayTeamId;
+    teamIds.push(homeTeamId, awayTeamId);
   }
 
   const names = await loadTeamNames(teamIds);
@@ -242,18 +252,36 @@ export async function enrichKnockoutAdvancingOnRows(
         )
       : new Map<number, UserPredictionRow>();
 
+  const resolved =
+    userId != null
+      ? resolveKnockoutBracketTeams(knockRows, preds, tbdId)
+      : new Map<number, { homeTeamId: number; awayTeamId: number }>();
+
+  const snapshots =
+    userId != null
+      ? await (
+          await import("./resolveUserSlotTeams.js")
+        ).loadUserBracketSnapshotsForMatches(
+          userId,
+          knockRows.map((r) => r.id)
+        )
+      : new Map<number, { homeTeamId: number; awayTeamId: number }>();
+
   const teamIds: number[] = [];
   for (let i = 0; i < koRows.length; i++) {
     const row = koRows[i];
     const ko = knockRows[i];
     const pred = preds.get(ko.id);
-    const advId = resolveKnockoutAdvancingTeamId(
-      ko,
-      pred,
-      ko.home_team_id,
-      ko.away_team_id,
-      tbdId
-    );
+    const num = knockoutExternalNum(ko.external_id);
+    const slot = num != null ? resolved.get(num) : undefined;
+    const snap = snapshots.get(ko.id);
+    const homeId = snap?.homeTeamId ?? slot?.homeTeamId ?? ko.home_team_id;
+    const awayId = snap?.awayTeamId ?? slot?.awayTeamId ?? ko.away_team_id;
+
+    const advId =
+      userId != null
+        ? matchOutcomeFromPrediction(pred, homeId, awayId, tbdId).winnerId
+        : matchOutcomeOfficial(ko, homeId, awayId, tbdId).winnerId;
 
     const homeScore =
       ko.status === "FINISHED" ? ko.home_score : pred?.predicted_home_score ?? null;

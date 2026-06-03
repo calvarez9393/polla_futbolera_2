@@ -27,6 +27,7 @@ import {
   syncAllOfficialKnockoutAdvancement
 } from "../bracket/knockoutAdvancement.js";
 import { resolveKnockoutAdvancingForSave } from "../bracket/knockoutAdvancingSave.js";
+import { resolveUserSlotTeamsForMatch } from "../bracket/resolveUserSlotTeams.js";
 import { syncUserBonusPicksFromBracket } from "../bracket/deriveBonusFromBracket.js";
 import { requiresKnockoutAdvancingTeam } from "../scoring/rulesConfig.js";
 import {
@@ -175,14 +176,29 @@ predictionsRouter.post("/", async (req, res, next) => {
       return;
     }
 
+    let bracketHomeId: number | null = null;
+    let bracketAwayId: number | null = null;
+    if (match.stage === "KNOCKOUT") {
+      const slot = await resolveUserSlotTeamsForMatch(req.user!.id, match);
+      if (slot) {
+        bracketHomeId = slot.homeTeamId;
+        bracketAwayId = slot.awayTeamId;
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO predictions (user_id, match_id, predicted_home_score, predicted_away_score, predicted_advancing_team_id)
-      VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO predictions (
+        user_id, match_id, predicted_home_score, predicted_away_score,
+        predicted_advancing_team_id, bracket_home_team_id, bracket_away_team_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id, match_id)
       DO UPDATE SET
         predicted_home_score = EXCLUDED.predicted_home_score,
         predicted_away_score = EXCLUDED.predicted_away_score,
         predicted_advancing_team_id = EXCLUDED.predicted_advancing_team_id,
+        bracket_home_team_id = EXCLUDED.bracket_home_team_id,
+        bracket_away_team_id = EXCLUDED.bracket_away_team_id,
         updated_at = NOW()
       RETURNING *`,
       [
@@ -190,7 +206,9 @@ predictionsRouter.post("/", async (req, res, next) => {
         input.matchId,
         input.predictedHomeScore,
         input.predictedAwayScore,
-        advancingTeamId
+        advancingTeamId,
+        bracketHomeId,
+        bracketAwayId
       ]
     );
 

@@ -33,6 +33,7 @@ export function AdminPage() {
   const [isError, setIsError] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importingKo, setImportingKo] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     api<Record<string, unknown>>("/admin/scoring-rules")
@@ -97,6 +98,40 @@ export function AdminPage() {
     }
   }
 
+  async function resetCompetition() {
+    const ok = window.confirm(
+      "¿Reiniciar partidos y ranking?\n\n" +
+        "Se borrarán TODAS las predicciones, puntos, bonos y resultados oficiales. " +
+        "El ranking quedará en cero. Los usuarios y el calendario importado se mantienen.\n\n" +
+        "Esta acción no se puede deshacer."
+    );
+    if (!ok) return;
+
+    setResetting(true);
+    setMessage("");
+    try {
+      const result = await api<{
+        ok: boolean;
+        message: string;
+        predictionScores: number;
+        predictions: number;
+        matchesReset: number;
+      }>("/admin/competition/reset", {
+        method: "POST",
+        body: JSON.stringify({ confirm: true })
+      });
+      setIsError(false);
+      setMessage(
+        `${result.message}. Puntos: ${result.predictionScores}, predicciones: ${result.predictions}, partidos: ${result.matchesReset}`
+      );
+    } catch (e) {
+      setIsError(true);
+      setMessage((e as Error).message);
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function importKnockout() {
     setImportingKo(true);
     setMessage("");
@@ -158,6 +193,27 @@ export function AdminPage() {
             Oficiales y bonos
           </Link>
         </div>
+      </section>
+
+      <section className="panel-card admin-danger-zone" style={{ marginBottom: "1.25rem" }}>
+        <SectionTitle
+          title="Pruebas / reinicio"
+          help={
+            <p>
+              Borra puntos, predicciones, clasificados simulados, bonos y marcadores de todos los partidos del torneo
+              activo. Útil en entornos de prueba o producción mientras validan la app. No elimina usuarios ni el
+              calendario importado; las eliminatorias vuelven a equipos TBD hasta que reimportes o asignes cruces.
+            </p>
+          }
+        />
+        <button
+          type="button"
+          className="btn btn-danger btn-block"
+          disabled={resetting}
+          onClick={resetCompetition}
+        >
+          {resetting ? "Reiniciando…" : "Reiniciar partidos y ranking"}
+        </button>
       </section>
 
       <div className="admin-grid">

@@ -6,6 +6,7 @@ import { runSync } from "../sync/service.js";
 import { adminMatchesRouter } from "./matches.js";
 import { adminUsersRouter } from "./users.js";
 import { adminCalendarRouter } from "./calendar.js";
+import { adminCompetitionRouter } from "./competition.js";
 import { adminScoringRouter } from "./scoring.js";
 import { adminMatchScoringRouter } from "./matchScoring.js";
 import { pickScoringRulesRow, scoringRulesToDbParams, SCORING_RULE_UPDATE_SQL } from "../scoring/ruleFields.js";
@@ -46,6 +47,7 @@ adminRouter.use(adminScoringRouter);
 adminRouter.use(adminMatchScoringRouter);
 adminRouter.use("/users", adminUsersRouter);
 adminRouter.use(adminCalendarRouter);
+adminRouter.use("/competition", adminCompetitionRouter);
 
 adminRouter.get("/scoring-rules", async (_req, res, next) => {
   try {

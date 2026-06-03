@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   KNOCKOUT_SLOT_FEEDS,
-  matchOutcome,
+  matchOutcomeFromPrediction,
+  matchOutcomeOfficial,
   parseSlotFeed,
   resolveKnockoutBracketTeams
 } from "./knockoutBracketLogic.js";
@@ -70,7 +71,7 @@ describe("resolveKnockoutBracketTeams", () => {
     expect(resolved.get(89)?.homeTeamId).toBe(A);
   });
 
-  it("usa resultado oficial finalizado", () => {
+  it("no sobrescribe el cuadro del usuario con resultado oficial", () => {
     const rows = [
       koRow(1, 74, A, B, "FINISHED", {
         home_score: 1,
@@ -79,9 +80,12 @@ describe("resolveKnockoutBracketTeams", () => {
       }),
       koRow(2, 89, TBD, C, "NOT_STARTED")
     ];
+    const preds = new Map([
+      [1, { predicted_home_score: 0, predicted_away_score: 1, predicted_advancing_team_id: B }]
+    ]);
 
-    const resolved = resolveKnockoutBracketTeams(rows, new Map(), TBD);
-    expect(resolved.get(89)?.homeTeamId).toBe(A);
+    const resolved = resolveKnockoutBracketTeams(rows, preds, TBD);
+    expect(resolved.get(89)?.homeTeamId).toBe(B);
   });
 
   it("propaga ganador en empate con penales a octavos", () => {
@@ -103,7 +107,7 @@ describe("resolveKnockoutBracketTeams", () => {
       predicted_away_score: 1,
       predicted_advancing_team_id: String(A) as unknown as number
     };
-    expect(matchOutcome(row, pred, A, B, TBD).winnerId).toBe(A);
+    expect(matchOutcomeFromPrediction(pred, A, B, TBD).winnerId).toBe(A);
 
     const rows = [row, koRow(2, 89, TBD, TBD, "NOT_STARTED")];
     const preds = new Map([[1, pred]]);
@@ -120,19 +124,22 @@ describe("resolveKnockoutBracketTeams", () => {
     expect(resolved.get(89)?.homeTeamId).toBe(TBD);
   });
 
-  it("propaga perdedor de semifinal al tercer puesto", () => {
+  it("propaga perdedor de semifinal al tercer puesto según predicción del usuario", () => {
     const rows = [
-      koRow(1, 101, A, B, "FINISHED", { home_score: 2, away_score: 1, winner_team_id: A }),
+      koRow(1, 101, A, B, "NOT_STARTED"),
       koRow(2, 103, TBD, TBD, "NOT_STARTED")
     ];
-    const resolved = resolveKnockoutBracketTeams(rows, new Map(), TBD);
+    const preds = new Map([
+      [1, { predicted_home_score: 2, predicted_away_score: 1, predicted_advancing_team_id: A }]
+    ]);
+    const resolved = resolveKnockoutBracketTeams(rows, preds, TBD);
     expect(resolved.get(103)?.homeTeamId).toBe(B);
   });
 });
 
-describe("matchOutcome", () => {
-  it("deduce ganador desde marcador", () => {
+describe("matchOutcomeOfficial", () => {
+  it("deduce ganador oficial desde marcador", () => {
     const row = koRow(1, 73, C, D, "FINISHED", { home_score: 3, away_score: 1 });
-    expect(matchOutcome(row, null, C, D, TBD).winnerId).toBe(C);
+    expect(matchOutcomeOfficial(row, C, D, TBD).winnerId).toBe(C);
   });
 });

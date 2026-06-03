@@ -13,8 +13,7 @@
 import bcrypt from "bcrypt";
 import { pool } from "../db/pool.js";
 import { getActiveTournamentId } from "../modules/settings/service.js";
-import { setOfficialQualifiedTeams } from "../modules/scoring/qualifiers.js";
-import { setOfficialBonusResults } from "../modules/scoring/bonuses.js";
+import { resetCompetitionData } from "../modules/admin/resetCompetition.js";
 import { finalizeMatch } from "../modules/scoring/finalize.js";
 import { syncUserQualifierPredictions } from "../modules/qualifiers/fromPredictions.js";
 
@@ -97,77 +96,6 @@ async function purgeExtraDemoUsers(keepCount: number): Promise<number> {
     [DEMO_LOGIN_PATTERN, allowed]
   );
   return result.rowCount ?? 0;
-}
-
-/** Limpia estado competitivo del torneo: puntos, predicciones y marcadores oficiales. */
-async function cleanCompetitionData(tournamentId: number): Promise<{
-  predictionScores: number;
-  predictions: number;
-  qualifierPredictions: number;
-  groupPredictions: number;
-  bonusPredictions: number;
-  matchesReset: number;
-  knockoutTeamsReset: number;
-}> {
-  const scores = await pool.query(`DELETE FROM prediction_scores`);
-  const preds = await pool.query(
-    `DELETE FROM predictions p
-     USING matches m
-     WHERE p.match_id = m.id AND m.tournament_id = $1`,
-    [tournamentId]
-  );
-  const qualifiers = await pool.query(`DELETE FROM qualifier_predictions`);
-  const groupPreds = await pool.query(
-    `DELETE FROM group_predictions gp
-     USING groups g
-     WHERE gp.group_id = g.id AND g.tournament_id = $1`,
-    [tournamentId]
-  );
-  const bonuses = await pool.query(`DELETE FROM bonus_predictions`);
-
-  const matches = await pool.query(
-    `UPDATE matches SET
-      status = 'NOT_STARTED',
-      home_score = NULL,
-      away_score = NULL,
-      winner_team_id = NULL,
-      updated_at = NOW()
-    WHERE tournament_id = $1`,
-    [tournamentId]
-  );
-
-  const tbd = await pool.query("SELECT id FROM teams WHERE external_id = 'wc2026-tbd' LIMIT 1");
-  let knockoutTeamsReset = 0;
-  if (tbd.rows[0]) {
-    const knockoutTeams = await pool.query(
-      `UPDATE matches SET
-        home_team_id = $2,
-        away_team_id = $2,
-        updated_at = NOW()
-      WHERE tournament_id = $1 AND stage = 'KNOCKOUT'`,
-      [tournamentId, tbd.rows[0].id]
-    );
-    knockoutTeamsReset = knockoutTeams.rowCount ?? 0;
-  }
-
-  await setOfficialQualifiedTeams([]);
-  await setOfficialBonusResults({});
-
-  const groupIds = await pool.query(`SELECT id FROM groups WHERE tournament_id = $1`, [tournamentId]);
-  const { recalculateGroupStandings } = await import("../modules/standings/recalculate.js");
-  for (const row of groupIds.rows) {
-    await recalculateGroupStandings(row.id as number);
-  }
-
-  return {
-    predictionScores: scores.rowCount ?? 0,
-    predictions: preds.rowCount ?? 0,
-    qualifierPredictions: qualifiers.rowCount ?? 0,
-    groupPredictions: groupPreds.rowCount ?? 0,
-    bonusPredictions: bonuses.rowCount ?? 0,
-    matchesReset: matches.rowCount ?? 0,
-    knockoutTeamsReset
-  };
 }
 
 async function ensureUsers(count: number, passwordHash: string): Promise<number[]> {
@@ -338,7 +266,7 @@ async function run(): Promise<void> {
   }
 
   if (clean) {
-    const wiped = await cleanCompetitionData(tournamentId);
+    const wiped = await resetCompetitionData(tournamentId);
     console.log("Limpieza (--clean):");
     console.log(`  Puntos (prediction_scores): ${wiped.predictionScores}`);
     console.log(`  Predicciones de partidos: ${wiped.predictions}`);
