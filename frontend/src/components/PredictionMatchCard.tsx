@@ -133,8 +133,6 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
         ? match.awayTeamLogoUrl
         : match.advancingTeamLogoUrl;
 
-  const displayViaPenalties = showAdvancingUi && isDrawPrediction && Boolean(effectiveAdvancingId);
-
   const predictedAdvancingName =
     match.prediction && match.advancingTeamName
       ? match.advancingTeamName
