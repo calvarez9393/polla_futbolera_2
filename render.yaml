@@ -22,7 +22,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        value: https://polla-futbolera.onrender.com
+        value: https://polla-futbolera-wofa.onrender.com
       - key: API_FOOTBALL_KEY
         value: replace_me
       - key: API_FOOTBALL_LEAGUE_ID
@@ -43,7 +43,7 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://polla-backend.onrender.com
+        value: https://polla-backend-a166.onrender.com
     routes:
       - type: rewrite
         source: /*
