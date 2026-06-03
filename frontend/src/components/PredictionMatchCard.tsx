@@ -63,8 +63,8 @@ interface PredictionMatchCardProps {
 }
 
 export function PredictionMatchCard({ match, onSaved, readOnly = false }: PredictionMatchCardProps) {
-  const [predHome, setPredHome] = useState(match.prediction?.predictedHomeScore ?? 0);
-  const [predAway, setPredAway] = useState(match.prediction?.predictedAwayScore ?? 0);
+  const [predHome, setPredHome] = useState(String(match.prediction?.predictedHomeScore ?? 0));
+  const [predAway, setPredAway] = useState(String(match.prediction?.predictedAwayScore ?? 0));
   const [advancingId, setAdvancingId] = useState<number | "">(
     match.prediction?.predictedAdvancingTeamId ?? ""
   );
@@ -72,9 +72,12 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
   const [localMsg, setLocalMsg] = useState("");
   const [isError, setIsError] = useState(false);
 
+  const predHomeNum = parseInt(predHome, 10) || 0;
+  const predAwayNum = parseInt(predAway, 10) || 0;
+
   const needsAdvancingOnDraw = requiresAdvancingOnDraw(match.stage, match.roundKey);
   const showAdvancingUi = showsKnockoutAdvancingUi(match.stage, match.roundKey);
-  const isDrawPrediction = predHome === predAway;
+  const isDrawPrediction = predHomeNum === predAwayNum;
   const nextLabel = match.nextRoundLabel ?? nextRoundLabel(match.roundKey);
   const canPredict =
     match.predictionsOpen && match.status !== "FINISHED" && match.status !== "LIVE";
@@ -83,8 +86,8 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
   const showPoints = match.status === "FINISHED";
 
   useEffect(() => {
-    setPredHome(match.prediction?.predictedHomeScore ?? 0);
-    setPredAway(match.prediction?.predictedAwayScore ?? 0);
+    setPredHome(String(match.prediction?.predictedHomeScore ?? 0));
+    setPredAway(String(match.prediction?.predictedAwayScore ?? 0));
     const savedAdv =
       match.prediction?.predictedAdvancingTeamId ??
       (match.advancingViaPenalties ? match.advancingTeamId : null);
@@ -93,10 +96,10 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
 
   useEffect(() => {
     if (!showAdvancingUi || !canPredict) return;
-    if (predHome === predAway) return;
+    if (predHomeNum === predAwayNum) return;
     const auto = advancingTeamIdFromScores(
-      predHome,
-      predAway,
+      predHomeNum,
+      predAwayNum,
       match.homeTeamId,
       match.awayTeamId
     );
@@ -140,8 +143,8 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
         predictedAdvancingTeamId?: number;
       } = {
         matchId: Number(match.id),
-        predictedHomeScore: predHome,
-        predictedAwayScore: predAway
+        predictedHomeScore: predHomeNum,
+        predictedAwayScore: predAwayNum
       };
       if (showAdvancingUi && effectiveAdvancingId) {
         payload.predictedAdvancingTeamId = effectiveAdvancingId;
@@ -162,7 +165,7 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
   }
 
   return (
-    <article className={`match-card prediction-match-card${matchCardStatusClass(match.status)}`}>
+    <article className={`match-card prediction-match-card${matchCardStatusClass(match.status)}${match.prediction != null ? " prediction-match-card--filled" : ""}`}>
       <div className="match-team home">
         <span className="match-team-name">{match.homeTeamName}</span>
         <TeamFlag name={match.homeTeamName} logoUrl={match.homeTeamLogoUrl} size="lg" />
@@ -220,20 +223,24 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
             <div className="score-inputs prediction-card-scores">
               <input
                 className="input"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 aria-label="Goles local"
                 value={predHome}
-                onChange={(e) => setPredHome(Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setPredHome(e.target.value.replace(/[^0-9]/g, ""))}
               />
               <span className="score-sep">:</span>
               <input
                 className="input"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 aria-label="Goles visitante"
                 value={predAway}
-                onChange={(e) => setPredAway(Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setPredAway(e.target.value.replace(/[^0-9]/g, ""))}
               />
             </div>
             {showAdvancingUi && isDrawPrediction && match.homeTeamId && match.awayTeamId && (
