@@ -38,7 +38,12 @@ export async function resolveUserSlotTeamsForMatch(
   return { homeTeamId: slot.homeTeamId, awayTeamId: slot.awayTeamId };
 }
 
-/** Equipos guardados al predecir; en R16 siempre se recalcula desde clasificados reales. */
+/**
+ * Cruce contra el que se puntúa cada predicción eliminatoria:
+ * - R16 parte de los clasificados reales (todos predicen sobre el cruce oficial).
+ * - De octavos en adelante vale el cruce que el usuario vio al predecir (snapshot);
+ *   solo si falta se recalcula desde su cuadro.
+ */
 export async function getUserBracketTeamsForScoring(
   userId: number,
   match: {
@@ -62,7 +67,7 @@ export async function getUserBracketTeamsForScoring(
   const bh = prediction?.bracket_home_team_id;
   const ba = prediction?.bracket_away_team_id;
   const tbdId = await getTbdTeamId();
-  if (bh != null && ba != null && bh !== tbdId && ba !== tbdId) {
+  if (bh != null && ba != null && Number(bh) !== tbdId && Number(ba) !== tbdId) {
     return { homeTeamId: Number(bh), awayTeamId: Number(ba) };
   }
   return resolveUserSlotTeamsForMatch(userId, match);

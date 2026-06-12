@@ -5,7 +5,8 @@ import {
 } from "../bracket/knockoutAdvancement.js";
 import { matchCalendarDateSql } from "../matches/calendarDate.js";
 import { recalculateGroupStandings } from "../standings/recalculate.js";
-import { calculateExpertDayBonuses } from "./phase1Bonuses.js";
+import { calculateExpertDayBonuses, calculateInvictoAndGroupMasterBonuses } from "./phase1Bonuses.js";
+import { calculateQualifierScores } from "./qualifiers.js";
 import { syncOfficialBonusResultsAndScore } from "../bracket/deriveBonusFromBracket.js";
 import { calculateMatchScores } from "./service.js";
 
@@ -23,22 +24,30 @@ export async function finalizeMatch(matchId: number): Promise<void> {
   }
   if (row?.stage === "KNOCKOUT") {
     const tourn = await pool.query(
-      `SELECT tournament_id, round_key FROM matches WHERE id = $1`,
+      `SELECT tournament_id FROM matches WHERE id = $1`,
       [matchId]
     );
     const tournamentId = tourn.rows[0]?.tournament_id as number | undefined;
-    const roundKey = tourn.rows[0]?.round_key as string | undefined;
     if (tournamentId) {
       await syncAllOfficialKnockoutAdvancement(tournamentId);
     } else {
       await propagateOfficialKnockoutAdvancement(matchId);
     }
-    if (roundKey === "F" || roundKey === "TP3" || roundKey === "SF") {
-      try {
-        await syncOfficialBonusResultsAndScore();
-      } catch {
-        // Bonos parciales o sin datos aún
-      }
+    // Premios del cuadro (semifinalistas, finalistas, campeón…) en cada resultado: los puntos
+    // van apareciendo a medida que cada equipo avanza, sin recálculo manual.
+    try {
+      await syncOfficialBonusResultsAndScore();
+    } catch {
+      // Bonos parciales o sin datos aún
+    }
+  }
+
+  if (row?.stage === "GROUP") {
+    // Clasificados a 16avos: se omite en silencio hasta que los 24 estén definidos.
+    try {
+      await calculateQualifierScores();
+    } catch {
+      // Faltan grupos por completar
     }
   }
 
@@ -46,5 +55,11 @@ export async function finalizeMatch(matchId: number): Promise<void> {
     await calculateExpertDayBonuses();
   } catch {
     // Día aún incompleto o sin predicciones
+  }
+
+  try {
+    await calculateInvictoAndGroupMasterBonuses();
+  } catch {
+    // Faltan clasificados oficiales para maestro de grupo
   }
 }

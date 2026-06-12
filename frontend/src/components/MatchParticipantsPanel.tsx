@@ -8,6 +8,10 @@ interface Participant {
   displayName: string | null;
   predictedHomeScore: number;
   predictedAwayScore: number;
+  predictedAdvancingTeamName?: string | null;
+  bracketHomeTeamName?: string | null;
+  bracketAwayTeamName?: string | null;
+  sameMatchup?: boolean | null;
   points: number;
   breakdown: Record<string, number>;
 }
@@ -16,6 +20,7 @@ interface MatchScoringData {
   match: {
     id: number;
     status: string;
+    stage?: string | null;
     homeTeamName: string;
     awayTeamName: string;
     homeScore: number | null;
@@ -91,6 +96,19 @@ export function MatchParticipantsPanel({
                     </span>
                   )}
                 </div>
+                {data.match.stage === "KNOCKOUT" && p.bracketHomeTeamName && p.bracketAwayTeamName && (
+                  <p className="admin-block-hint" style={{ margin: "0.35rem 0 0" }}>
+                    Su cruce: <strong>{p.bracketHomeTeamName}</strong> vs{" "}
+                    <strong>{p.bracketAwayTeamName}</strong>
+                    {p.predictedAdvancingTeamName && <> · Avanza: <strong>{p.predictedAdvancingTeamName}</strong></>}
+                    {p.sameMatchup === false && (
+                      <span style={{ color: "var(--text-muted)" }}>
+                        {" "}
+                        — cruce distinto al oficial: solo puntúa el equipo que avanza
+                      </span>
+                    )}
+                  </p>
+                )}
                 {p.breakdown && Object.keys(p.breakdown).length > 0 && (
                   <PointsChips breakdown={p.breakdown} totalPoints={p.points} />
                 )}

@@ -16,6 +16,8 @@ interface TournamentSettings {
   predictionLockHoursBefore: number;
   knockoutPredictionsOpenDate: string;
   knockoutPredictionsCloseDate: string;
+  extrasOpenDate: string;
+  extrasCloseDate: string;
   knockoutFixtureDefaults?: { openDate: string; closeDate: string };
 }
 
@@ -27,7 +29,9 @@ export function AdminPage() {
     tournamentName: "Mundial FIFA 2026",
     predictionLockHoursBefore: 24,
     knockoutPredictionsOpenDate: "",
-    knockoutPredictionsCloseDate: ""
+    knockoutPredictionsCloseDate: "",
+    extrasOpenDate: "",
+    extrasCloseDate: ""
   });
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -67,7 +71,9 @@ export function AdminPage() {
           tournamentName: settings.tournamentName,
           predictionLockHoursBefore: settings.predictionLockHoursBefore,
           knockoutPredictionsOpenDate: settings.knockoutPredictionsOpenDate,
-          knockoutPredictionsCloseDate: settings.knockoutPredictionsCloseDate
+          knockoutPredictionsCloseDate: settings.knockoutPredictionsCloseDate,
+          extrasOpenDate: settings.extrasOpenDate,
+          extrasCloseDate: settings.extrasCloseDate
         })
       });
       const refreshed = await api<TournamentSettings>("/admin/settings/tournament");
@@ -308,6 +314,30 @@ export function AdminPage() {
               <span className="scoring-rule-hint">
                 Opcional. Cierre global de todas las predicciones eliminatorias. Sugerido:{" "}
                 {settings.knockoutFixtureDefaults?.closeDate ?? "2026-07-19"}.
+              </span>
+            </div>
+            <div className="field">
+              <label className="rule-field-label">Goleador/asistidor desde</label>
+              <input
+                className="input"
+                type="date"
+                value={settings.extrasOpenDate}
+                onChange={(e) => setSettings({ ...settings, extrasOpenDate: e.target.value })}
+              />
+              <span className="scoring-rule-hint">
+                Desde cuándo los usuarios pueden llenar goleador y máximo asistidor. Vacío = sin restricción.
+              </span>
+            </div>
+            <div className="field">
+              <label className="rule-field-label">Goleador/asistidor hasta</label>
+              <input
+                className="input"
+                type="date"
+                value={settings.extrasCloseDate}
+                onChange={(e) => setSettings({ ...settings, extrasCloseDate: e.target.value })}
+              />
+              <span className="scoring-rule-hint">
+                Último día para llenarlos. Vacío = sin cierre.
               </span>
             </div>
             <button type="submit" className="btn btn-ghost btn-block">

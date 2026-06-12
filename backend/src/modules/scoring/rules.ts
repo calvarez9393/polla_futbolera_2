@@ -16,8 +16,8 @@ function goalDifference(home: number, away: number): number {
   return home - away;
 }
 
-/** Fase 1: grupos y dieciseisavos — ganador/empate, diferencia, marcador exacto */
-function computePhase1MatchPoints(
+/** Ganador/empate y diferencia de goles (comunes a todas las rondas). */
+function computeOutcomeAndDiffPoints(
   predictedHome: number,
   predictedAway: number,
   realHome: number,
@@ -27,16 +27,10 @@ function computePhase1MatchPoints(
   let points = 0;
   const breakdown: Record<string, number> = {};
 
-  const exact = predictedHome === realHome && predictedAway === realAway;
   const predOutcome = getOutcome(predictedHome, predictedAway);
   const realOutcome = getOutcome(realHome, realAway);
   const sameGoalDiff =
     goalDifference(predictedHome, predictedAway) === goalDifference(realHome, realAway);
-
-  if (exact) {
-    points += rules.exact_score_points;
-    breakdown.exactScore = rules.exact_score_points;
-  }
 
   if (predOutcome === realOutcome) {
     if (realOutcome === "DRAW") {
@@ -48,8 +42,8 @@ function computePhase1MatchPoints(
     }
   }
 
-  // En empate exacto no se suma diferencia de goles (reglamento: empate +5 = 8 pts)
-  if (sameGoalDiff && !(exact && realOutcome === "DRAW")) {
+  // El empate (exacto o no) también suma diferencia de goles, igual que acertar al ganador.
+  if (sameGoalDiff) {
     points += rules.goal_diff_points;
     breakdown.goalDiff = rules.goal_diff_points;
   }
@@ -57,7 +51,27 @@ function computePhase1MatchPoints(
   return { points, breakdown };
 }
 
-/** Fase 2: octavos en adelante — equipo que avanza + marcador exacto */
+/** Fase 1: grupos y dieciseisavos — ganador/empate, diferencia, marcador exacto */
+function computePhase1MatchPoints(
+  predictedHome: number,
+  predictedAway: number,
+  realHome: number,
+  realAway: number,
+  rules: OfficialScoringRules
+): { points: number; breakdown: Record<string, number> } {
+  const base = computeOutcomeAndDiffPoints(predictedHome, predictedAway, realHome, realAway, rules);
+  let points = base.points;
+  const breakdown = base.breakdown;
+
+  if (predictedHome === realHome && predictedAway === realAway) {
+    points += rules.exact_score_points;
+    breakdown.exactScore = rules.exact_score_points;
+  }
+
+  return { points, breakdown };
+}
+
+/** Fase 2: octavos en adelante — ganador/empate y diferencia como en fase 1, más marcador exacto de la ronda y equipo que avanza. */
 function computePhase2MatchPoints(
   predictedHome: number,
   predictedAway: number,
@@ -68,8 +82,9 @@ function computePhase2MatchPoints(
   winnerTeamId: number | null | undefined,
   rules: OfficialScoringRules
 ): { points: number; breakdown: Record<string, number> } {
-  let points = 0;
-  const breakdown: Record<string, number> = {};
+  const base = computeOutcomeAndDiffPoints(predictedHome, predictedAway, realHome, realAway, rules);
+  let points = base.points;
+  const breakdown = base.breakdown;
   const { advance, exact } = getKnockoutRoundPoints(roundKey, rules);
 
   if (predictedHome === realHome && predictedAway === realAway) {
@@ -80,13 +95,39 @@ function computePhase2MatchPoints(
   if (
     predictedAdvancingTeamId &&
     winnerTeamId &&
-    predictedAdvancingTeamId === winnerTeamId
+    Number(predictedAdvancingTeamId) === Number(winnerTeamId)
   ) {
     points += advance;
     breakdown.advancing = advance;
   }
 
   return { points, breakdown };
+}
+
+/** Cruce predicho distinto al oficial: solo puntúa el avance si el elegido del usuario es el ganador real. */
+export function computeAdvanceOnlyPoints(args: {
+  roundKey?: string | null;
+  stage?: string;
+  roundLabel?: string | null;
+  predictedAdvancingTeamId: number | null | undefined;
+  winnerTeamId: number | null | undefined;
+  rules: OfficialScoringRules;
+}): { points: number; breakdown: Record<string, number> } | null {
+  const roundKey = resolveRoundKey({
+    round_key: args.roundKey,
+    stage: args.stage,
+    round_label: args.roundLabel
+  });
+  const { advance } = getKnockoutRoundPoints(roundKey, args.rules);
+  if (
+    advance > 0 &&
+    args.predictedAdvancingTeamId != null &&
+    args.winnerTeamId != null &&
+    Number(args.predictedAdvancingTeamId) === Number(args.winnerTeamId)
+  ) {
+    return { points: advance, breakdown: { advancing: advance } };
+  }
+  return null;
 }
 
 export function computePredictionPoints(args: {

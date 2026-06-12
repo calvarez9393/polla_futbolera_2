@@ -68,19 +68,21 @@ export function PredictionsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  function applyLoadedDates(rows: DateRow[]) {
+    setDates(rows);
+    if (rows.length === 0) return;
+    const keys = rows.map((d) => String(d.match_date).slice(0, 10));
+    setSelectedDate((current) =>
+      keys.includes(current) ? current : (keys.find((k) => k.startsWith("2026-06")) ?? keys[0])
+    );
+  }
+
   useEffect(() => {
-    api<DateRow[]>("/matches/dates")
-      .then((rows) => {
-        setDates(rows);
-        if (rows.length === 0) return;
-        const keys = rows.map((d) => String(d.match_date).slice(0, 10));
-        if (!keys.includes(selectedDate)) {
-          const preferred = keys.find((k) => k.startsWith("2026-06")) ?? keys[0];
-          setSelectedDate(preferred);
-        }
-      })
+    const params = stageFilter ? `?stage=${stageFilter}` : "";
+    api<DateRow[]>(`/matches/dates${params}`)
+      .then(applyLoadedDates)
       .catch(() => setDates([]));
-  }, []);
+  }, [stageFilter]);
 
   const loadCalendar = useCallback(async () => {
     setLoading(true);

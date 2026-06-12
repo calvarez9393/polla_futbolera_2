@@ -51,6 +51,7 @@ async function mapCalendarRows(rows: any[]) {
         awayTeamLogoUrl: row.away_team_logo_url,
         homeScore: row.home_score,
         awayScore: row.away_score,
+        winnerTeamId: row.winner_team_id ? Number(row.winner_team_id) : null,
         ...(await buildPredictionAvailability(row, lockAt)),
         predictionLockAt: lockAt.toISOString()
       };

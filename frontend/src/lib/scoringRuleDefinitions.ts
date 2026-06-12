@@ -19,7 +19,7 @@ export const SCORING_RULE_SECTIONS: ScoringRuleSection[] = [
     fields: [
       { key: "outcome_points", label: "Acertar ganador", hint: "Victoria local o visitante" },
       { key: "draw_points", label: "Acertar empate", hint: "Cuando el resultado real es empate" },
-      { key: "goal_diff_points", label: "Acertar diferencia de goles", hint: "Misma diferencia, sin ser empate exacto 1-1" },
+      { key: "goal_diff_points", label: "Acertar diferencia de goles", hint: "Misma diferencia apuntando al mismo ganador; los empates también suman" },
       { key: "exact_score_points", label: "Acertar marcador exacto", hint: "Mismo resultado final" }
     ]
   },
@@ -48,6 +48,7 @@ export const SCORING_RULE_SECTIONS: ScoringRuleSection[] = [
   },
   {
     title: "Fase 2 — Octavos de final",
+    description: "Además se suman ganador/empate y diferencia de goles con los valores de Fase 1.",
     fields: [
       { key: "r8_advance_points", label: "Equipo que avanza", hint: "Quién pasa de ronda" },
       { key: "r8_exact_points", label: "Marcador exacto", hint: "Goles local y visitante" }

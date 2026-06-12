@@ -34,7 +34,9 @@ const settingsSchema = z
     predictionLockHoursBefore: z.number().int().min(0).max(168),
     tournamentName: z.string().min(1).optional(),
     knockoutPredictionsOpenDate: optionalDateYmd.optional(),
-    knockoutPredictionsCloseDate: optionalDateYmd.optional()
+    knockoutPredictionsCloseDate: optionalDateYmd.optional(),
+    extrasOpenDate: optionalDateYmd.optional(),
+    extrasCloseDate: optionalDateYmd.optional()
   })
   .refine(
     (data) => {
@@ -44,6 +46,15 @@ const settingsSchema = z
       return open <= close;
     },
     { message: "La fecha de apertura debe ser anterior o igual a la de cierre" }
+  )
+  .refine(
+    (data) => {
+      const open = data.extrasOpenDate?.trim();
+      const close = data.extrasCloseDate?.trim();
+      if (!open || !close) return true;
+      return open <= close;
+    },
+    { message: "La fecha de apertura de goleador/asistidor debe ser anterior o igual a la de cierre" }
   );
 
 export const adminMatchesRouter = Router();
@@ -59,6 +70,8 @@ adminMatchesRouter.get("/settings/tournament", async (_req, res, next) => {
       dataSource: await getSetting("data_source", "manual"),
       knockoutPredictionsOpenDate: await getSetting("knockout_predictions_open_date", ""),
       knockoutPredictionsCloseDate: await getSetting("knockout_predictions_close_date", ""),
+      extrasOpenDate: await getSetting("extras_open_date", ""),
+      extrasCloseDate: await getSetting("extras_close_date", ""),
       knockoutFixtureDefaults: fixtureDefaults
     });
   } catch (error) {
@@ -79,6 +92,12 @@ adminMatchesRouter.put("/settings/tournament", async (req, res, next) => {
         "knockout_predictions_close_date",
         input.knockoutPredictionsCloseDate.trim()
       );
+    }
+    if (input.extrasOpenDate !== undefined) {
+      await setSetting("extras_open_date", input.extrasOpenDate.trim());
+    }
+    if (input.extrasCloseDate !== undefined) {
+      await setSetting("extras_close_date", input.extrasCloseDate.trim());
     }
     res.json({ ok: true });
   } catch (error) {
@@ -207,6 +226,29 @@ adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
   }
 });
 
+/** Ganador al finalizar: en empate eliminatorio exige (o conserva) el ganador en penales; si no, lo deriva del marcador. */
+function resolveFinishedWinner(
+  input: { home_score: number | null; away_score: number | null; winner_team_id?: number | null },
+  m: { stage: string; home_team_id: number; away_team_id: number; winner_team_id: number | null }
+): { winnerId: number | null } | { error: string } {
+  let winnerId = input.winner_team_id ?? null;
+  if (input.home_score == null || input.away_score == null) {
+    return { winnerId };
+  }
+  if (input.home_score === input.away_score) {
+    if (m.stage !== "KNOCKOUT") return { winnerId };
+    if (!winnerId && m.winner_team_id) return { winnerId: Number(m.winner_team_id) };
+    if (!winnerId) {
+      return {
+        error: "En empate debes indicar el ganador en penales (quién pasa a la siguiente ronda)"
+      };
+    }
+    return { winnerId };
+  }
+  winnerId ??= input.home_score > input.away_score ? m.home_team_id : m.away_team_id;
+  return { winnerId };
+}
+
 adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
   try {
     const input = z
@@ -218,52 +260,35 @@ adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
       })
       .parse(req.body);
 
+    const existing = await pool.query(
+      "SELECT id, stage, home_team_id, away_team_id, winner_team_id FROM matches WHERE id = $1",
+      [req.params.id]
+    );
+    const m = existing.rows[0];
+    if (!m) {
+      res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+
+    const resolved =
+      input.status === "FINISHED"
+        ? resolveFinishedWinner(input, m)
+        : { winnerId: input.winner_team_id ?? null };
+    if ("error" in resolved) {
+      res.status(400).json({ message: resolved.error });
+      return;
+    }
+    const winnerId = resolved.winnerId;
+
     const result = await pool.query(
       `UPDATE matches SET
         status = $1, home_score = $2, away_score = $3, winner_team_id = $4, updated_at = NOW()
       WHERE id = $5
       RETURNING *`,
-      [input.status, input.home_score, input.away_score, input.winner_team_id, req.params.id]
+      [input.status, input.home_score, input.away_score, winnerId, req.params.id]
     );
 
-    if (!result.rows[0]) {
-      res.status(404).json({ message: "Partido no encontrado" });
-      return;
-    }
-
     if (input.status === "FINISHED") {
-      const m = result.rows[0];
-      const isKnockout = m.stage === "KNOCKOUT";
-      const isDraw =
-        input.home_score != null &&
-        input.away_score != null &&
-        input.home_score === input.away_score;
-
-      if (isKnockout && isDraw && !input.winner_team_id) {
-        res.status(400).json({
-          message:
-            "En empate debes indicar el ganador en penales (quién pasa a la siguiente ronda)"
-        });
-        return;
-      }
-
-      let winnerId = input.winner_team_id ?? null;
-      if (
-        winnerId == null &&
-        input.home_score != null &&
-        input.away_score != null &&
-        input.home_score !== input.away_score
-      ) {
-        winnerId =
-          input.home_score > input.away_score ? m.home_team_id : m.away_team_id;
-      }
-      if (winnerId) {
-        await pool.query(`UPDATE matches SET winner_team_id = $1 WHERE id = $2`, [
-          winnerId,
-          req.params.id
-        ]);
-        result.rows[0].winner_team_id = winnerId;
-      }
       await finalizeMatch(Number(req.params.id));
     }
 

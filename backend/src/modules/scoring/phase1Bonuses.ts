@@ -2,7 +2,6 @@ import { pool } from "../../db/pool.js";
 import {
   matchCalendarDateSql,
   parseCalendarYmd,
-  phase1MatchSql,
   ymdToExpertDaySourceId
 } from "../matches/calendarDate.js";
 import { getActiveTournamentId } from "../settings/service.js";
@@ -26,7 +25,7 @@ function outcomeCorrect(
 
 /**
  * Bono experto del día: por cada jornada (fecha de calendario) en la que el usuario
- * acierta el 1X2 en todos los partidos de Fase 1 de ese día.
+ * acierta el 1X2 en todos los partidos de fase de grupos de ese día (eliminatorias no cuentan).
  * source_id = YYYYMMDD (una fila por usuario y por día).
  */
 export async function calculateExpertDayBonuses(): Promise<{ awards: number; daysProcessed: number }> {
@@ -35,7 +34,7 @@ export async function calculateExpertDayBonuses(): Promise<{ awards: number; day
   if (!tournamentId) return { awards: 0, daysProcessed: 0 };
 
   const calDate = matchCalendarDateSql("m");
-  const phase1 = phase1MatchSql("m");
+  const phase1 = `m.stage = 'GROUP'`;
 
   await pool.query(`DELETE FROM prediction_scores WHERE source_type = 'EXPERT_DAY'`);
 

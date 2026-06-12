@@ -23,6 +23,19 @@ interface BonusPicks {
   topAssister: string | null;
 }
 
+interface ExtrasWindow {
+  openDate: string | null;
+  closeDate: string | null;
+  open: boolean;
+}
+
+function extrasWindowLabel(w: ExtrasWindow): string {
+  if (w.openDate && w.closeDate) return `Plazo: del ${w.openDate} al ${w.closeDate}`;
+  if (w.openDate) return `Se pueden llenar desde el ${w.openDate}`;
+  if (w.closeDate) return `Se pueden llenar hasta el ${w.closeDate}`;
+  return "";
+}
+
 function teamName(teams: Team[], id: number | null): string {
   if (id == null) return "—";
   return teams.find((t) => t.id === id)?.name ?? `Equipo ${id}`;
@@ -41,6 +54,7 @@ export function ExtrasPage() {
   });
   const [earnedPoints, setEarnedPoints] = useState<number | null>(null);
   const [earnedBreakdown, setEarnedBreakdown] = useState<Record<string, number> | null>(null);
+  const [extrasWindow, setExtrasWindow] = useState<ExtrasWindow | null>(null);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -50,7 +64,9 @@ export function ExtrasPage() {
       picks: BonusPicks;
       earnedPoints: number | null;
       earnedBreakdown: Record<string, number> | null;
+      extrasWindow?: ExtrasWindow;
     }>("/predictions/me/bonuses");
+    setExtrasWindow(res.extrasWindow ?? null);
     setTeams(res.teams);
     setPicks({
       championTeamId: res.picks.championTeamId ?? null,
@@ -219,6 +235,13 @@ export function ExtrasPage() {
       <form className="panel-card" onSubmit={onSubmit}>
         <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Premios especiales</h2>
 
+        {extrasWindow && extrasWindowLabel(extrasWindow) && (
+          <p className="admin-block-hint" style={{ marginBottom: "0.75rem" }}>
+            {extrasWindowLabel(extrasWindow)}
+            {!extrasWindow.open && <strong> — plazo cerrado</strong>}
+          </p>
+        )}
+
         <div className="field">
           <label>Goleador del mundial (25 pts)</label>
           <input
@@ -226,6 +249,7 @@ export function ExtrasPage() {
             value={picks.topScorer ?? ""}
             onChange={(e) => setPicks((p) => ({ ...p, topScorer: e.target.value }))}
             placeholder="Nombre del jugador"
+            disabled={extrasWindow ? !extrasWindow.open : false}
           />
         </div>
         <div className="field">
@@ -235,10 +259,16 @@ export function ExtrasPage() {
             value={picks.topAssister ?? ""}
             onChange={(e) => setPicks((p) => ({ ...p, topAssister: e.target.value }))}
             placeholder="Nombre del jugador"
+            disabled={extrasWindow ? !extrasWindow.open : false}
           />
         </div>
 
-        <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: "1rem" }}>
+        <button
+          type="submit"
+          className="btn btn-primary btn-block"
+          style={{ marginTop: "1rem" }}
+          disabled={extrasWindow ? !extrasWindow.open : false}
+        >
           Guardar premios especiales
         </button>
       </form>

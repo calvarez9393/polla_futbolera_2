@@ -7,11 +7,15 @@ import { activeTournamentCondition, matchFromClause, matchSelectFields } from ".
 import {
   buildPredictionAvailability,
   getActiveTournamentId,
+  getSetting,
   loadKnockoutPredictionConfig,
   knockoutPredictionClosedReason,
   resolvePredictionLockAt
 } from "../settings/service.js";
-import { buildKnockoutPredictionWindowApi } from "../bracket/knockoutPredictionWindow.js";
+import {
+  buildKnockoutPredictionWindowApi,
+  formatVenueCalendarDate
+} from "../bracket/knockoutPredictionWindow.js";
 import { optionalTeamId } from "../../utils/zodHelpers.js";
 
 const predictionSchema = z.object({
@@ -312,6 +316,22 @@ predictionsRouter.post("/me/qualifiers/recompute", async (req, res, next) => {
   }
 });
 
+/** Ventana para llenar goleador/asistidor; sin fechas configuradas queda siempre abierta. */
+async function getExtrasWindow(): Promise<{
+  openDate: string | null;
+  closeDate: string | null;
+  open: boolean;
+}> {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  const rawOpen = (await getSetting("extras_open_date", "")).trim();
+  const rawClose = (await getSetting("extras_close_date", "")).trim();
+  const openDate = ymd.test(rawOpen) ? rawOpen : null;
+  const closeDate = ymd.test(rawClose) ? rawClose : null;
+  const today = formatVenueCalendarDate();
+  const open = (!openDate || today >= openDate) && (!closeDate || today <= closeDate);
+  return { openDate, closeDate, open };
+}
+
 predictionsRouter.get("/me/bonuses", async (req, res, next) => {
   try {
     const userId = req.user!.id;
@@ -348,7 +368,8 @@ predictionsRouter.get("/me/bonuses", async (req, res, next) => {
       },
       earnedPoints: score.rows[0]?.points ?? null,
       earnedBreakdown: score.rows[0]?.breakdown ?? null,
-      derivedFromBracket: true
+      derivedFromBracket: true,
+      extrasWindow: await getExtrasWindow()
     });
   } catch (error) {
     next(error);
@@ -363,6 +384,17 @@ const bonusExtrasSchema = z.object({
 predictionsRouter.put("/me/bonuses", async (req, res, next) => {
   try {
     const input = bonusExtrasSchema.parse(req.body);
+    const window = await getExtrasWindow();
+    if (!window.open) {
+      const today = formatVenueCalendarDate();
+      res.status(400).json({
+        message:
+          window.openDate && today < window.openDate
+            ? `El goleador y asistidor se podrán llenar desde el ${window.openDate}`
+            : `El plazo para llenar goleador y asistidor cerró el ${window.closeDate}`
+      });
+      return;
+    }
     const userId = req.user!.id;
     const derived = await syncUserBonusPicksFromBracket(userId);
     await pool.query(

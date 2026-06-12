@@ -33,6 +33,7 @@ interface CalendarMatch {
   awayTeamLogoUrl?: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  winnerTeamId?: number | null;
 }
 
 type ResultFilter = "all" | "pending" | "finished" | "live";
@@ -54,22 +55,17 @@ function countMatches(matches: CalendarMatch[]) {
   };
 }
 
-function sortByStatus(matches: CalendarMatch[]): CalendarMatch[] {
-  const order = (s: string) => (s === "FINISHED" ? 0 : s === "LIVE" ? 1 : 2);
-  return [...matches].sort((a, b) => order(a.status) - order(b.status));
-}
-
+/** Mantiene el orden del calendario: así las tarjetas no se mueven al finalizar un partido. */
 function filterMatches(matches: CalendarMatch[], resultFilter: ResultFilter): CalendarMatch[] {
-  const sorted = sortByStatus(matches);
   switch (resultFilter) {
     case "finished":
-      return sorted.filter((m) => isFinished(m.status));
+      return matches.filter((m) => isFinished(m.status));
     case "pending":
-      return sorted.filter((m) => isPendingResult(m.status) && m.status !== "LIVE");
+      return matches.filter((m) => isPendingResult(m.status) && m.status !== "LIVE");
     case "live":
-      return sorted.filter((m) => m.status === "LIVE");
+      return matches.filter((m) => m.status === "LIVE");
     default:
-      return sorted;
+      return matches;
   }
 }
 
@@ -211,20 +207,26 @@ export function AdminCalendarPage() {
     });
   }, [loadDates]);
 
-  const loadGroupCalendar = useCallback(async () => {
-    setLoadingGroup(true);
-    try {
-      const data = await api<{ matches: CalendarMatch[] }>(`/admin/calendar?date=${selectedDate}`);
-      setGroupMatches(data.matches);
-    } catch {
-      setGroupMatches([]);
-    } finally {
-      setLoadingGroup(false);
-    }
-  }, [selectedDate]);
+  // silent: refresca datos sin desmontar la lista (mantiene scroll y ronda abierta tras guardar).
+  const loadGroupCalendar = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoadingGroup(true);
+      try {
+        const data = await api<{ matches: CalendarMatch[] }>(
+          `/admin/calendar?date=${selectedDate}`
+        );
+        setGroupMatches(data.matches);
+      } catch {
+        setGroupMatches([]);
+      } finally {
+        setLoadingGroup(false);
+      }
+    },
+    [selectedDate]
+  );
 
-  const loadKnockout = useCallback(async () => {
-    setLoadingKo(true);
+  const loadKnockout = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingKo(true);
     try {
       const data = await api<{ matches: CalendarMatch[] }>("/admin/calendar/knockout");
       setKoMatches(data.matches);
@@ -245,12 +247,12 @@ export function AdminCalendarPage() {
   }, [loadKnockout]);
 
   const onGroupSaved = useCallback(() => {
-    loadGroupCalendar();
+    loadGroupCalendar({ silent: true });
     loadDates();
   }, [loadGroupCalendar, loadDates]);
 
   const onKnockoutSaved = useCallback(() => {
-    loadKnockout();
+    loadKnockout({ silent: true });
   }, [loadKnockout]);
 
   const koCounts = useMemo(() => countMatches(koMatches), [koMatches]);
@@ -480,7 +482,7 @@ function AdminMatchCard({
 
   const [simHome, setSimHome] = useState(match.homeScore ?? 0);
   const [simAway, setSimAway] = useState(match.awayScore ?? 0);
-  const [penaltyWinnerId, setPenaltyWinnerId] = useState<number | "">("");
+  const [penaltyWinnerId, setPenaltyWinnerId] = useState<number | "">(match.winnerTeamId ?? "");
   const [savingResult, setSavingResult] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [showParticipants, setShowParticipants] = useState(true);
@@ -497,7 +499,7 @@ function AdminMatchCard({
   useEffect(() => {
     setSimHome(match.homeScore ?? 0);
     setSimAway(match.awayScore ?? 0);
-    setPenaltyWinnerId("");
+    setPenaltyWinnerId(match.winnerTeamId ?? "");
     setSchedDate(initialDate);
     setSchedTime(initialTime);
     setSchedMsg("");
