@@ -6,6 +6,7 @@ import { finalizeMatch } from "../scoring/finalize.js";
 import { getSetting, setSetting, getPredictionLockHours } from "../settings/service.js";
 import { getKnockoutFixtureDefaults } from "../bracket/knockoutPredictionWindow.js";
 import { importWorldCup2026Schedule } from "../import/worldCup2026.js";
+import { matchLocalScheduleParts } from "../matches/calendarDate.js";
 import { optionalTeamId } from "../../utils/zodHelpers.js";
 
 const matchBodySchema = z.object({
@@ -156,6 +157,51 @@ adminMatchesRouter.post("/matches/import-worldcup-2026", async (_req, res, next)
   try {
     const result = await importWorldCup2026Schedule();
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const scheduleSchema = z.object({
+  calendarDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  kickoffTimeLocal: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+});
+
+adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
+  try {
+    const input = scheduleSchema.parse(req.body);
+    const existing = await pool.query(
+      "SELECT id, starts_at, calendar_date, kickoff_time_local FROM matches WHERE id = $1",
+      [req.params.id]
+    );
+    const match = existing.rows[0];
+    if (!match) {
+      res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+
+    // starts_at se desplaza el mismo delta que la fecha/hora local para conservar el huso de la sede.
+    const current = matchLocalScheduleParts(match);
+    const oldNaive = Date.parse(`${current.ymd}T${current.time}:00Z`);
+    const newNaive = Date.parse(`${input.calendarDate}T${input.kickoffTimeLocal}:00Z`);
+    if (!Number.isFinite(oldNaive) || !Number.isFinite(newNaive)) {
+      res.status(400).json({ message: "Fecha u hora inválida" });
+      return;
+    }
+    const startsAt = new Date(new Date(match.starts_at).getTime() + (newNaive - oldNaive));
+
+    const result = await pool.query(
+      `UPDATE matches SET
+        starts_at = $1, calendar_date = $2::date, kickoff_time_local = $3, updated_at = NOW()
+      WHERE id = $4
+      RETURNING *`,
+      [startsAt.toISOString(), input.calendarDate, input.kickoffTimeLocal, req.params.id]
+    );
+
+    res.json({
+      match: result.rows[0],
+      message: "Fecha del partido actualizada"
+    });
   } catch (error) {
     next(error);
   }

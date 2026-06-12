@@ -21,6 +21,18 @@ export function parseCalendarYmd(value: unknown): string {
   throw new Error(`Fecha de calendario inválida: ${s}`);
 }
 
+/** Fecha y hora locales de la sede; si faltan, usa los componentes UTC de starts_at (mismo criterio que matchCalendarDateSql). */
+export function matchLocalScheduleParts(match: {
+  starts_at: Date | string;
+  calendar_date?: unknown;
+  kickoff_time_local?: string | null;
+}): { ymd: string; time: string } {
+  const startsIso = new Date(match.starts_at).toISOString();
+  const ymd = match.calendar_date ? parseCalendarYmd(match.calendar_date) : startsIso.slice(0, 10);
+  const time = match.kickoff_time_local?.slice(0, 5) ?? startsIso.slice(11, 16);
+  return { ymd, time };
+}
+
 /** source_id único por jornada para EXPERT_DAY (YYYYMMDD). */
 export function ymdToExpertDaySourceId(ymd: string): number {
   const id = Number(ymd.replace(/-/g, ""));

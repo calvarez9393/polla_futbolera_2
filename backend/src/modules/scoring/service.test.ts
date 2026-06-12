@@ -32,6 +32,33 @@ describe("computePredictionPoints — Fase 1", () => {
     expect(result.points).toBe(5);
   });
 
+  it("ganador invertido no suma diferencia de goles", () => {
+    const result = computePredictionPoints({
+      predictedHome: 0,
+      predictedAway: 1,
+      realHome: 1,
+      realAway: 0,
+      roundKey: "GROUP",
+      rules
+    });
+    expect(result.points).toBe(0);
+    expect(result.breakdown.goalDiff).toBeUndefined();
+  });
+
+  it("empate sin exacto suma empate y diferencia", () => {
+    const result = computePredictionPoints({
+      predictedHome: 1,
+      predictedAway: 1,
+      realHome: 2,
+      realAway: 2,
+      roundKey: "GROUP",
+      rules
+    });
+    expect(result.points).toBe(5);
+    expect(result.breakdown.draw).toBe(3);
+    expect(result.breakdown.goalDiff).toBe(2);
+  });
+
   it("empate con marcador exacto", () => {
     const result = computePredictionPoints({
       predictedHome: 1,

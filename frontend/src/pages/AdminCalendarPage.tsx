@@ -20,6 +20,8 @@ interface CalendarMatch {
   roundKey?: string | null;
   status: string;
   startsAt: string;
+  calendarDate?: string | null;
+  kickoffTimeLocal?: string | null;
   roundLabel: string | null;
   matchday: number | null;
   groupName: string | null;
@@ -472,12 +474,21 @@ function AdminMatchCard({
   onSaved: () => void;
   highlightKnockout?: boolean;
 }) {
+  const initialDate = match.calendarDate?.slice(0, 10) ?? match.startsAt.slice(0, 10);
+  const initialTime =
+    match.kickoffTimeLocal?.slice(0, 5) ?? new Date(match.startsAt).toISOString().slice(11, 16);
+
   const [simHome, setSimHome] = useState(match.homeScore ?? 0);
   const [simAway, setSimAway] = useState(match.awayScore ?? 0);
   const [penaltyWinnerId, setPenaltyWinnerId] = useState<number | "">("");
   const [savingResult, setSavingResult] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [showParticipants, setShowParticipants] = useState(true);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [schedDate, setSchedDate] = useState(initialDate);
+  const [schedTime, setSchedTime] = useState(initialTime);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [schedMsg, setSchedMsg] = useState("");
 
   const isKnockout = match.stage === "KNOCKOUT";
   const isDraw = simHome === simAway;
@@ -487,7 +498,31 @@ function AdminMatchCard({
     setSimHome(match.homeScore ?? 0);
     setSimAway(match.awayScore ?? 0);
     setPenaltyWinnerId("");
-  }, [match]);
+    setSchedDate(initialDate);
+    setSchedTime(initialTime);
+    setSchedMsg("");
+  }, [match, initialDate, initialTime]);
+
+  async function saveSchedule() {
+    if (!schedDate || !schedTime) {
+      setSchedMsg("Indica fecha y hora");
+      return;
+    }
+    setSavingSchedule(true);
+    setSchedMsg("");
+    try {
+      await api(`/admin/matches/${Number(match.id)}/schedule`, {
+        method: "PATCH",
+        body: JSON.stringify({ calendarDate: schedDate, kickoffTimeLocal: schedTime })
+      });
+      setSchedMsg("Fecha actualizada");
+      onSaved();
+    } catch (e) {
+      setSchedMsg((e as Error).message);
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
 
   async function saveOfficialResult() {
     if (isKnockout && isDraw && !penaltyWinnerId) {
@@ -562,6 +597,54 @@ function AdminMatchCard({
         }, [])}
         {match.status === "FINISHED" && <span className="badge badge-finished"> Finalizado</span>}
       </p>
+
+      <div className="admin-match-block" style={{ marginBottom: "1rem" }}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-block"
+          onClick={() => setShowSchedule((v) => !v)}
+        >
+          {showSchedule ? "Ocultar cambio de fecha" : "Cambiar fecha y hora"}
+        </button>
+        {showSchedule && (
+          <>
+            <SectionTitle
+              as="h3"
+              title="Fecha y hora del partido"
+              help={
+                <p>
+                  Fecha y hora <strong>locales de la sede</strong>. Al guardar se recalcula el día en el
+                  calendario y el cierre de predicciones del partido.
+                </p>
+              }
+            />
+            <div className="score-inputs">
+              <input
+                className="input"
+                type="date"
+                value={schedDate}
+                onChange={(e) => setSchedDate(e.target.value)}
+              />
+              <input
+                className="input"
+                type="time"
+                value={schedTime}
+                onChange={(e) => setSchedTime(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              disabled={savingSchedule}
+              onClick={saveSchedule}
+              style={{ marginTop: "0.75rem" }}
+            >
+              {savingSchedule ? "Guardando…" : "Guardar nueva fecha"}
+            </button>
+            {schedMsg && <small className="admin-local-msg">{schedMsg}</small>}
+          </>
+        )}
+      </div>
 
       <div className="admin-match-block admin-match-block--result admin-match-block--solo">
         <SectionTitle

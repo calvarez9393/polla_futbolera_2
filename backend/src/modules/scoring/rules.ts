@@ -11,8 +11,9 @@ function getOutcome(home: number, away: number): "HOME" | "AWAY" | "DRAW" {
   return home > away ? "HOME" : "AWAY";
 }
 
+/** Diferencia con signo: solo coincide si el resultado apunta al mismo ganador (o ambos empatan). */
 function goalDifference(home: number, away: number): number {
-  return Math.abs(home - away);
+  return home - away;
 }
 
 /** Fase 1: grupos y dieciseisavos — ganador/empate, diferencia, marcador exacto */

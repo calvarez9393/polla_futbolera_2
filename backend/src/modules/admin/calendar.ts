@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { requireAdmin, requireAuth } from "../../middlewares/auth.js";
-import { matchCalendarDateSql } from "../matches/calendarDate.js";
+import { matchCalendarDateSql, matchLocalScheduleParts } from "../matches/calendarDate.js";
 import { activeTournamentCondition, matchFromClause, matchSelectFields } from "../matches/query.js";
 import {
   buildPredictionAvailability,
@@ -31,12 +31,15 @@ async function mapCalendarRows(rows: any[]) {
   return Promise.all(
     rows.map(async (row) => {
       const lockAt = await resolvePredictionLockAt(row);
+      const schedule = matchLocalScheduleParts(row);
       return {
         id: row.id,
         stage: row.stage,
         roundKey: row.round_key,
         status: row.status,
         startsAt: row.starts_at,
+        calendarDate: schedule.ymd,
+        kickoffTimeLocal: schedule.time,
         roundLabel: row.round_label,
         matchday: row.matchday,
         groupName: row.group_name,
