@@ -471,7 +471,25 @@ export async function applyR16PairingsToMatches(
   }
 }
 
-export async function autoFillOfficialR16FromResults(): Promise<{
+function r16SlotMissingReason(
+  fx: R16FixtureDef,
+  slot: { homeTeamId: number | null; awayTeamId: number | null } | undefined
+): string {
+  const reasons: string[] = [];
+  if (!slot?.homeTeamId) reasons.push(`falta local (${fx.homeSlotLabel})`);
+  if (!slot?.awayTeamId) {
+    reasons.push(
+      fx.awaySlot.kind === "third_combo"
+        ? `falta 3º (${fx.awaySlotLabel}) — ¿8 mejores terceros calculados?`
+        : `falta visitante (${fx.awaySlotLabel})`
+    );
+  }
+  return reasons.join("; ");
+}
+
+export async function autoFillOfficialR16FromResults(
+  options: { onlyTbd?: boolean } = {}
+): Promise<{
   updated: number;
   total: number;
   missing: Array<{ matchNum: number; reason: string }>;
@@ -488,25 +506,23 @@ export async function autoFillOfficialR16FromResults(): Promise<{
   const resolved = resolveR16FromPool(WC2026_R16_FIXTURES, poolData, teamMap);
 
   const { rows } = await loadR16MatchRows(tournamentId);
+  // Con onlyTbd solo se llenan cruces aún «Por definir»: los ya fijados (auto o corregidos
+  // a mano por el admin) se respetan.
+  const targetRows = options.onlyTbd
+    ? rows.filter(
+        (row) => Number(row.home_team_id) === tbdId || Number(row.away_team_id) === tbdId
+      )
+    : rows;
   const pairings: Array<{ matchId: number; homeTeamId: number; awayTeamId: number }> = [];
   const missing: Array<{ matchNum: number; reason: string }> = [];
 
-  for (const row of rows) {
+  for (const row of targetRows) {
     const extNum = externalNumFromId(row.external_id as string);
     const fx = fixtureForExternalNum(extNum);
     if (!fx) continue;
     const slot = resolved.find((r) => r.matchNumber === fx.matchNumber);
     if (!slot?.homeTeamId || !slot?.awayTeamId) {
-      const reasons: string[] = [];
-      if (!slot?.homeTeamId) reasons.push(`falta local (${fx.homeSlotLabel})`);
-      if (!slot?.awayTeamId) {
-        reasons.push(
-          fx.awaySlot.kind === "third_combo"
-            ? `falta 3º (${fx.awaySlotLabel}) — ¿8 mejores terceros calculados?`
-            : `falta visitante (${fx.awaySlotLabel})`
-        );
-      }
-      missing.push({ matchNum: extNum, reason: reasons.join("; ") });
+      missing.push({ matchNum: extNum, reason: r16SlotMissingReason(fx, slot) });
       continue;
     }
     pairings.push({
@@ -517,6 +533,10 @@ export async function autoFillOfficialR16FromResults(): Promise<{
   }
 
   if (pairings.length === 0) {
+    // Con onlyTbd y todos los cruces ya definidos no hay nada pendiente: no es un error.
+    if (options.onlyTbd && targetRows.length === 0) {
+      return { updated: 0, total: rows.length, missing, qualifiers };
+    }
     throw new Error(
       `No se pudo armar ningún cruce. Partidos de grupo finalizados: ${qualifiers.finishedGroupMatches}. ` +
         `Grupos con tabla completa: ${qualifiers.groupsWithFullTable}/12. ` +

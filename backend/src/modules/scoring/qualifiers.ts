@@ -20,10 +20,32 @@ export async function getOfficialQualifiedTeams(): Promise<number[]> {
   }
 }
 
+/** True solo cuando todos los partidos de fase de grupos del torneo activo están finalizados. */
+export async function isGroupStageComplete(): Promise<boolean> {
+  const tournamentId = await getActiveTournamentId();
+  if (!tournamentId) return false;
+
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS total,
+      COUNT(*) FILTER (
+        WHERE status = 'FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL
+      )::int AS finished
+    FROM matches
+    WHERE tournament_id = $1 AND stage = 'GROUP'`,
+    [tournamentId]
+  );
+  const row = result.rows[0];
+  return Number(row?.total ?? 0) > 0 && Number(row.finished) === Number(row.total);
+}
+
 /** Top 2 por grupo según standings oficiales (resultados finalizados). */
 export async function computeOfficialQualifiersFromResults(): Promise<number[]> {
   const tournamentId = await getActiveTournamentId();
   if (!tournamentId) return [];
+
+  // Los standings rankean a todos los equipos aunque falten partidos, así que el top 2
+  // solo es válido cuando la fase de grupos terminó por completo.
+  if (!(await isGroupStageComplete())) return [];
 
   const groups = await pool.query(
     `SELECT id FROM groups WHERE tournament_id = $1 ORDER BY name`,
@@ -50,6 +72,13 @@ export async function computeOfficialQualifiersFromResults(): Promise<number[]> 
  * No confundir con los 32 equipos del cuadro de dieciseisavos.
  */
 export async function ensureOfficialQualifiedTeams(): Promise<number[]> {
+  if (!(await isGroupStageComplete())) {
+    throw new Error(
+      "La fase de grupos no ha terminado: los puntos de clasificados y el bono maestro de grupo " +
+        "solo se calculan cuando finaliza el último partido de grupos."
+    );
+  }
+
   const saved = await getOfficialQualifiedTeams();
   if (saved.length === OFFICIAL_QUALIFIERS_COUNT) return saved;
 
