@@ -75,7 +75,20 @@ export function LeaderboardPage() {
         <section className="prize-pool" aria-label="Premios del torneo">
           <article className="prize-card prize-card--pool">
             <div className="prize-card-icon prize-card-icon--pool" aria-hidden>
-              <span>🏆</span>
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+                <path d="M17 5h2.5a1 1 0 0 1 1 1v1a3 3 0 0 1-3 3M7 5H4.5a1 1 0 0 0-1 1v1a3 3 0 0 0 3 3" />
+                <path d="M9.4 14.3 9 18h6l-.4-3.7M8 21h8M12 18v3" />
+              </svg>
             </div>
             <div className="prize-card-content">
               <p className="prize-card-eyebrow">Bote a repartir</p>
@@ -130,7 +143,14 @@ export function LeaderboardPage() {
             <strong>Sin puntuaciones aún</strong>
           </div>
         ) : (
-          <ol className="leaderboard-list">
+          <>
+            <div className="leaderboard-head" aria-hidden="true">
+              <span className="leaderboard-head-pos">Pos.</span>
+              <span>Jugador</span>
+              <span className="leaderboard-head-pts">Puntos</span>
+              <span />
+            </div>
+            <ol className="leaderboard-list">
             {rows.map((row, index) => {
               const name = playerName(row);
               const isMe = Number(row.user_id) === me?.id;
@@ -155,7 +175,8 @@ export function LeaderboardPage() {
                 </li>
               );
             })}
-          </ol>
+            </ol>
+          </>
         )}
       </div>
 

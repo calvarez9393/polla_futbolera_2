@@ -1701,8 +1701,9 @@ p {
 }
 
 .prize-card-icon--pool {
-  background: color-mix(in srgb, #34d399 22%, var(--os-800));
-  box-shadow: 0 0 20px color-mix(in srgb, #34d399 25%, transparent);
+  color: #6ee7b7;
+  background: color-mix(in srgb, #34d399 18%, var(--os-800));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #34d399 30%, transparent);
 }
 
 .prize-card-icon--gold {
@@ -1760,6 +1761,8 @@ p {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
@@ -1912,8 +1915,9 @@ p {
 }
 
 .leaderboard-row--me {
-  border-color: color-mix(in srgb, var(--brand-400) 45%, var(--border-subtle));
-  background: color-mix(in srgb, var(--brand-500) 8%, var(--os-800));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 8%, var(--os-800));
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .leaderboard-rank {
@@ -1922,10 +1926,12 @@ p {
   height: 2rem;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 999px;
   font-weight: 700;
   font-size: 0.9rem;
-  background: color-mix(in srgb, var(--os-700) 65%, transparent);
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--os-700) 60%, transparent);
+  border: 1px solid var(--border-subtle);
   color: var(--text-muted);
 }
 
@@ -1944,9 +1950,18 @@ p {
   color: #1a1208;
 }
 
+.leaderboard-rank--gold,
+.leaderboard-rank--silver,
+.leaderboard-rank--bronze {
+  border-color: transparent;
+  font-weight: 800;
+  box-shadow: 0 2px 8px color-mix(in srgb, #000 25%, transparent);
+}
+
 .leaderboard-name {
   font-weight: 600;
   font-size: 1rem;
+  letter-spacing: -0.01em;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1955,21 +1970,50 @@ p {
 
 .leaderboard-you {
   margin-left: 0.5rem;
-  font-size: 0.7rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--brand-300);
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
   vertical-align: middle;
+}
+
+.leaderboard-head {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.35rem 1rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.leaderboard-head-pos {
+  text-align: center;
+}
+
+.leaderboard-head-pts {
+  justify-self: end;
+  padding-right: 0.25rem;
 }
 
 .leaderboard-points {
   font-family: var(--font-serif);
   font-size: 1.35rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
   line-height: 1;
   padding-right: 0.25rem;
+  justify-self: end;
 }
 
 .leaderboard-points::after {
@@ -1992,6 +2036,10 @@ p {
 }
 
 @media (max-width: 480px) {
+  .leaderboard-head {
+    display: none;
+  }
+
   .leaderboard-row {
     grid-template-columns: 2.25rem 1fr auto;
     grid-template-rows: auto auto;
