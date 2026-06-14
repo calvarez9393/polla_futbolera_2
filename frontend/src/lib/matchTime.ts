@@ -13,6 +13,32 @@ export function formatKickoffLocal(match: {
   });
 }
 
+/** Fecha + hora de inicio en hora local de la sede (no la zona del navegador). */
+export function formatKickoffDateTimeLocal(match: {
+  calendar_date?: string | null;
+  kickoff_time_local?: string | null;
+  starts_at: string;
+}): string {
+  const datePart = match.calendar_date
+    ? formatShortDateYmd(match.calendar_date.slice(0, 10))
+    : new Date(match.starts_at).toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "numeric",
+        year: "2-digit"
+      });
+  return `${datePart}, ${formatKickoffLocal(match)}`;
+}
+
+function formatShortDateYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "numeric",
+    year: "2-digit",
+    timeZone: "UTC"
+  });
+}
+
 export function formatCalendarDateYmd(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("es-ES", {

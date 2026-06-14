@@ -8,10 +8,13 @@ import type { PredictedMatchup } from "./predictedMatchup";
 import { api } from "../lib/api";
 import { ROUND_LABELS } from "../lib/scoringLabels";
 import { matchCardStatusClass, statusBadgeClass, statusLabel } from "../lib/matchStatus";
+import { formatKickoffDateTimeLocal } from "../lib/matchTime";
 
 export interface ScoreMatch {
   matchId: number | string;
   startsAt: string;
+  calendarDate?: string | null;
+  kickoffTimeLocal?: string | null;
   status: string;
   stage?: string;
   roundKey?: string | null;
@@ -146,7 +149,14 @@ function MatchPointsCard({
       <p className="user-points-card-meta">
         <span className={statusBadgeClass(match.status)}>{statusLabel(match.status)}</span>
         <span>{matchSubtitle(match)}</span>
-        <span>{new Date(match.startsAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</span>
+        <span>
+          {formatKickoffDateTimeLocal({
+            calendar_date: match.calendarDate,
+            kickoff_time_local: match.kickoffTimeLocal,
+            starts_at: match.startsAt
+          })}{" "}
+          (hora sede)
+        </span>
       </p>
 
       <div className="user-points-breakdown-block">

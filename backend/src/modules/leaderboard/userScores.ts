@@ -1,5 +1,6 @@
 import { pool } from "../../db/pool.js";
 import { predictedMatchupFromRow, officialMatchupFromRow } from "../bracket/resolveUserSlotTeams.js";
+import { matchLocalScheduleParts } from "../matches/calendarDate.js";
 
 function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
   const fromBreakdown = breakdown.date;
@@ -152,6 +153,8 @@ export async function fetchUserScores(userId: number) {
       ps.breakdown,
       m.id AS match_id,
       m.starts_at,
+      m.calendar_date,
+      m.kickoff_time_local,
       m.status,
       m.stage,
       m.round_key,
@@ -272,9 +275,13 @@ export async function fetchUserScores(userId: number) {
         away_team_logo_url: row.away_team_logo_url as string | null
       });
 
+      const schedule = matchLocalScheduleParts(row);
+
       return {
         matchId: Number(row.match_id),
         startsAt: row.starts_at,
+        calendarDate: schedule.ymd,
+        kickoffTimeLocal: schedule.time,
         status: row.status,
         stage: row.stage,
         roundKey: row.round_key,
