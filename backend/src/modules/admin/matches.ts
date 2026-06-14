@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { requireAdmin, requireAuth } from "../../middlewares/auth.js";
-import { finalizeMatch } from "../scoring/finalize.js";
+import { finalizeMatch, unfinalizeMatch } from "../scoring/finalize.js";
 import { getSetting, setSetting, getPredictionLockHours } from "../settings/service.js";
 import { getKnockoutFixtureDefaults } from "../bracket/knockoutPredictionWindow.js";
 import { importWorldCup2026Schedule } from "../import/worldCup2026.js";
@@ -199,7 +199,9 @@ adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
       return;
     }
 
-    // starts_at se desplaza el mismo delta que la fecha/hora local para conservar el huso de la sede.
+    // starts_at se reconstruye a partir de la fecha/hora local de la sede + el huso inferido del
+    // partido (UTC = hora local + offset). El offset se normaliza a (-12 h, +12 h]: así, si un
+    // starts_at quedó con días arrastrados por un bug previo de huso, se corrige al volver a guardar.
     const current = matchLocalScheduleParts(match);
     const oldNaive = Date.parse(`${current.ymd}T${current.time}:00Z`);
     const newNaive = Date.parse(`${input.calendarDate}T${input.kickoffTimeLocal}:00Z`);
@@ -207,7 +209,11 @@ adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
       res.status(400).json({ message: "Fecha u hora inválida" });
       return;
     }
-    const startsAt = new Date(new Date(match.starts_at).getTime() + (newNaive - oldNaive));
+    const DAY_MS = 86_400_000;
+    let venueOffsetMs = new Date(match.starts_at).getTime() - oldNaive;
+    venueOffsetMs = ((venueOffsetMs % DAY_MS) + DAY_MS) % DAY_MS; // [0, 24 h)
+    if (venueOffsetMs > DAY_MS / 2) venueOffsetMs -= DAY_MS; // (-12 h, +12 h]
+    const startsAt = new Date(newNaive + venueOffsetMs);
 
     const result = await pool.query(
       `UPDATE matches SET
@@ -298,6 +304,48 @@ adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
         result.rows[0].stage === "KNOCKOUT"
           ? "Partido actualizado. Ganador enviado a la siguiente ronda del cuadro oficial."
           : "Partido actualizado. Puntos y tabla de grupo recalculados."
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Clave requerida para borrar el resultado de un partido. */
+const DELETE_RESULT_PASSWORD = "daniel";
+const deleteResultSchema = z.object({ password: z.string().min(1) });
+
+adminMatchesRouter.delete("/matches/:id/result", async (req, res, next) => {
+  try {
+    const { password } = deleteResultSchema.parse(req.body ?? {});
+    if (password !== DELETE_RESULT_PASSWORD) {
+      res.status(403).json({ message: "Clave incorrecta" });
+      return;
+    }
+
+    const existing = await pool.query(
+      "SELECT id, status FROM matches WHERE id = $1",
+      [req.params.id]
+    );
+    const m = existing.rows[0];
+    if (!m) {
+      res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+
+    // Borra el marcador y reinicia el partido; luego revierte puntos y derivados.
+    const result = await pool.query(
+      `UPDATE matches SET
+        status = 'NOT_STARTED', home_score = NULL, away_score = NULL,
+        winner_team_id = NULL, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+      [req.params.id]
+    );
+    await unfinalizeMatch(Number(req.params.id));
+
+    res.json({
+      match: result.rows[0],
+      message: "Resultado borrado. Puntos, tabla y bonos recalculados."
     });
   } catch (error) {
     next(error);

@@ -50,6 +50,52 @@ async function scoreGroupStageAfterResult(): Promise<void> {
   }
 }
 
+/**
+ * Revierte la finalización de un partido: borra los puntos directos de ese partido y recalcula
+ * todos los derivados (tabla del grupo, avance del cuadro, bonos y clasificados) para que no
+ * queden puntos fantasma. Debe llamarse DESPUÉS de poner el partido en NOT_STARTED sin marcador.
+ */
+export async function unfinalizeMatch(matchId: number): Promise<void> {
+  // Puntos directos del partido.
+  await pool.query(
+    `DELETE FROM prediction_scores WHERE source_type = 'MATCH' AND source_id = $1`,
+    [matchId]
+  );
+
+  const match = await pool.query(
+    `SELECT group_id, stage FROM matches WHERE id = $1`,
+    [matchId]
+  );
+  const row = match.rows[0];
+  if (row?.group_id && row.stage === "GROUP") {
+    await recalculateGroupStandings(row.group_id as number);
+  }
+  if (row?.stage === "KNOCKOUT") {
+    await syncKnockoutAfterResult(matchId);
+  }
+  if (row?.stage === "GROUP") {
+    await scoreGroupStageAfterResult();
+  }
+
+  // INVICTO y GROUP_MASTER no se auto-limpian al recalcular (solo insertan al cumplir el umbral),
+  // así que se borran antes de recalcular para revocarlos si el resultado borrado los invalidó.
+  await pool.query(
+    `DELETE FROM prediction_scores WHERE source_type IN ('INVICTO', 'GROUP_MASTER')`
+  );
+
+  try {
+    await calculateExpertDayBonuses();
+  } catch {
+    // Día aún incompleto o sin predicciones
+  }
+
+  try {
+    await calculateInvictoAndGroupMasterBonuses();
+  } catch {
+    // Faltan clasificados oficiales para maestro de grupo
+  }
+}
+
 /** Calcula puntos de predicciones y actualiza tabla del grupo si aplica. */
 export async function finalizeMatch(matchId: number): Promise<void> {
   await calculateMatchScores(matchId);

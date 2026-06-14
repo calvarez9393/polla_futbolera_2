@@ -10,6 +10,7 @@ import { TeamFlag } from "../components/TeamFlag";
 import { api } from "../lib/api";
 import { groupKnockoutByRound } from "../lib/knockoutRounds";
 import { adminMatchStatusClass } from "../lib/matchStatus";
+import { formatCalendarDateYmd } from "../lib/matchTime";
 import { nextRoundLabel } from "../lib/knockoutAdvancing";
 
 type AdminPhase = "group" | "knockout";
@@ -485,6 +486,10 @@ function AdminMatchCard({
   const [penaltyWinnerId, setPenaltyWinnerId] = useState<number | "">(match.winnerTeamId ?? "");
   const [savingResult, setSavingResult] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState("");
   const [showParticipants, setShowParticipants] = useState(true);
   const [showSchedule, setShowSchedule] = useState(false);
   const [schedDate, setSchedDate] = useState(initialDate);
@@ -503,6 +508,9 @@ function AdminMatchCard({
     setSchedDate(initialDate);
     setSchedTime(initialTime);
     setSchedMsg("");
+    setShowDelete(false);
+    setDeletePassword("");
+    setDeleteMsg("");
   }, [match, initialDate, initialTime]);
 
   async function saveSchedule() {
@@ -560,6 +568,29 @@ function AdminMatchCard({
     }
   }
 
+  async function deleteResult() {
+    if (!deletePassword) {
+      setDeleteMsg("Escribe la clave para borrar");
+      return;
+    }
+    setDeleting(true);
+    setDeleteMsg("");
+    try {
+      await api(`/admin/matches/${Number(match.id)}/result`, {
+        method: "DELETE",
+        body: JSON.stringify({ password: deletePassword })
+      });
+      setDeleteMsg("Resultado y puntos borrados");
+      setDeletePassword("");
+      setShowDelete(false);
+      onSaved();
+    } catch (e) {
+      setDeleteMsg((e as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const metaParts: ReactNode[] = [];
   if (isKnockout && match.roundLabel) {
     metaParts.push(<span key="round">{match.roundLabel}</span>);
@@ -567,8 +598,11 @@ function AdminMatchCard({
     metaParts.push(<span key="grp">{match.groupName}</span>);
     if (match.matchday != null) metaParts.push(<span key="j">J{match.matchday}</span>);
   }
+  // Hora de la sede (igual que el editor): evita el corrimiento de día por el huso del navegador.
   metaParts.push(
-    <span key="when">{new Date(match.startsAt).toLocaleString("es-ES")}</span>
+    <span key="when">
+      {formatCalendarDateYmd(initialDate)} · {initialTime} h (hora sede)
+    </span>
   );
 
   return (
@@ -705,6 +739,59 @@ function AdminMatchCard({
           {savingResult ? "Procesando…" : "Finalizar partido y calcular puntos"}
         </button>
         {localMsg && <small className="admin-local-msg">{localMsg}</small>}
+
+        {match.status === "FINISHED" && (
+          <div className="admin-match-delete" style={{ marginTop: "1rem" }}>
+            {!showDelete ? (
+              <button
+                type="button"
+                className="btn btn-danger btn-block"
+                onClick={() => {
+                  setShowDelete(true);
+                  setDeleteMsg("");
+                }}
+              >
+                Borrar resultado
+              </button>
+            ) : (
+              <div className="panel-card" style={{ padding: "0.85rem" }}>
+                <label>Escribe la clave para borrar el resultado y sus puntos</label>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Clave"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  style={{ marginTop: "0.4rem" }}
+                />
+                <div className="filter-row" style={{ marginTop: "0.6rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={deleting}
+                    onClick={deleteResult}
+                  >
+                    {deleting ? "Borrando…" : "Confirmar borrado"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={deleting}
+                    onClick={() => {
+                      setShowDelete(false);
+                      setDeletePassword("");
+                      setDeleteMsg("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            {deleteMsg && <small className="admin-local-msg">{deleteMsg}</small>}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: "1rem" }}>

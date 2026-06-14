@@ -73,56 +73,70 @@ export function MatchParticipantsPanel({
           {data.participants.length === 0 && data.withoutPrediction.length === 0 && (
             <p className="admin-block-hint">Sin participantes registrados.</p>
           )}
-          <ul className="match-participants-list">
-            {data.participants.map((p) => (
-              <li key={p.userId} className="match-participant-row">
-                <div className="match-participant-head">
-                  <span>{p.displayName || p.email}</span>
-                  <strong>{p.points} pts</strong>
-                </div>
-                <div className="match-participant-scores">
-                  <span className="match-participant-pred">
-                    <span className="match-participant-label">Predicción</span>
-                    <strong>
-                      {p.predictedHomeScore} – {p.predictedAwayScore}
-                    </strong>
-                  </span>
-                  {data.match.homeScore != null && (
-                    <span className="match-participant-real">
-                      <span className="match-participant-label">Real</span>
-                      <strong>
-                        {data.match.homeScore} – {data.match.awayScore}
-                      </strong>
-                    </span>
-                  )}
-                </div>
-                {data.match.stage === "KNOCKOUT" && p.bracketHomeTeamName && p.bracketAwayTeamName && (
-                  <p className="admin-block-hint" style={{ margin: "0.35rem 0 0" }}>
-                    Su cruce: <strong>{p.bracketHomeTeamName}</strong> vs{" "}
-                    <strong>{p.bracketAwayTeamName}</strong>
-                    {p.predictedAdvancingTeamName && <> · Avanza: <strong>{p.predictedAdvancingTeamName}</strong></>}
-                    {p.sameMatchup === false && (
-                      <span style={{ color: "var(--text-muted)" }}>
-                        {" "}
-                        — cruce distinto al oficial: solo puntúa el equipo que avanza
+
+          {data.participants.length > 0 && (
+            <details className="match-participants-accordion">
+              <summary className="match-participants-summary">
+                Ya predijeron ({data.participants.length}) — ver puntos
+              </summary>
+              <ul className="match-participants-list">
+                {data.participants.map((p) => (
+                  <li key={p.userId} className="match-participant-row">
+                    <div className="match-participant-head">
+                      <span>{p.displayName || p.email}</span>
+                      <strong>{p.points} pts</strong>
+                    </div>
+                    <div className="match-participant-scores">
+                      <span className="match-participant-pred">
+                        <span className="match-participant-label">Predicción</span>
+                        <strong>
+                          {p.predictedHomeScore} – {p.predictedAwayScore}
+                        </strong>
                       </span>
+                      {data.match.homeScore != null && (
+                        <span className="match-participant-real">
+                          <span className="match-participant-label">Real</span>
+                          <strong>
+                            {data.match.homeScore} – {data.match.awayScore}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                    {data.match.stage === "KNOCKOUT" && p.bracketHomeTeamName && p.bracketAwayTeamName && (
+                      <p className="admin-block-hint" style={{ margin: "0.35rem 0 0" }}>
+                        Su cruce: <strong>{p.bracketHomeTeamName}</strong> vs{" "}
+                        <strong>{p.bracketAwayTeamName}</strong>
+                        {p.predictedAdvancingTeamName && <> · Avanza: <strong>{p.predictedAdvancingTeamName}</strong></>}
+                        {p.sameMatchup === false && (
+                          <span style={{ color: "var(--text-muted)" }}>
+                            {" "}
+                            — cruce distinto al oficial: solo puntúa el equipo que avanza
+                          </span>
+                        )}
+                      </p>
                     )}
-                  </p>
-                )}
-                {p.breakdown && Object.keys(p.breakdown).length > 0 && (
-                  <PointsChips breakdown={p.breakdown} totalPoints={p.points} />
-                )}
-              </li>
-            ))}
-          </ul>
+                    {p.breakdown && Object.keys(p.breakdown).length > 0 && (
+                      <PointsChips breakdown={p.breakdown} totalPoints={p.points} />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {data.withoutPrediction.length > 0 && (
-            <details style={{ marginTop: "0.75rem" }}>
-              <summary className="admin-block-hint">
-                Sin predicción ({data.withoutPrediction.length})
+            <details className="match-participants-accordion" style={{ marginTop: "0.5rem" }}>
+              <summary className="match-participants-summary">
+                No han predicho ({data.withoutPrediction.length})
               </summary>
               <ul className="match-participants-list">
                 {data.withoutPrediction.map((u) => (
-                  <li key={u.userId}>{u.displayName || u.email}</li>
+                  <li key={u.userId} className="match-participant-nopred">
+                    <span>{u.displayName || u.email}</span>
+                    {u.displayName && u.email && (
+                      <span className="match-participant-nopred-user">{u.email}</span>
+                    )}
+                  </li>
                 ))}
               </ul>
             </details>
