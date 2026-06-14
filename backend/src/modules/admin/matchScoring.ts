@@ -108,7 +108,11 @@ adminMatchScoringRouter.get("/matches/:id/scoring", async (req, res, next) => {
         points: r.points ?? 0,
         breakdown: r.breakdown ?? {}
       })),
-      withoutPrediction: withoutPrediction.rows
+      withoutPrediction: withoutPrediction.rows.map((u) => ({
+        userId: u.user_id,
+        email: u.email,
+        displayName: u.display_name
+      }))
     });
   } catch (error) {
     next(error);
