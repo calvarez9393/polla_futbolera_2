@@ -1,6 +1,6 @@
 import { pool } from "../../db/pool.js";
 import { predictedMatchupFromRow, officialMatchupFromRow } from "../bracket/resolveUserSlotTeams.js";
-import { matchLocalScheduleParts } from "../matches/calendarDate.js";
+import { matchCalendarDateSql, matchLocalScheduleParts } from "../matches/calendarDate.js";
 
 function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
   const fromBreakdown = breakdown.date;
@@ -193,7 +193,9 @@ export async function fetchUserScores(userId: number) {
     LEFT JOIN teams padv ON padv.id = p.predicted_advancing_team_id
     LEFT JOIN teams wt ON wt.id = m.winner_team_id
     WHERE ps.user_id = $1
-    ORDER BY m.starts_at DESC`,
+    ORDER BY ${matchCalendarDateSql("m")} DESC,
+             COALESCE(m.kickoff_time_local, to_char(m.starts_at AT TIME ZONE 'UTC', 'HH24:MI')) DESC,
+             m.id DESC`,
     [userId]
   );
   const extrasResult = await pool.query(
