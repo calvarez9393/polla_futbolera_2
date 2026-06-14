@@ -22,9 +22,10 @@ authRouter.post("/login", async (req, res, next) => {
   try {
     const input = loginSchema.parse(req.body);
     const login = normalizeLoginIdentifier(input.login);
-    const result = await pool.query("SELECT id, email, role, password_hash FROM users WHERE email = $1", [
-      login
-    ]);
+    const result = await pool.query(
+      "SELECT id, email, role, password_hash, is_active FROM users WHERE email = $1",
+      [login]
+    );
     const user = result.rows[0];
     if (!user) {
       res.status(401).json({ message: "Credenciales inválidas" });
@@ -34,6 +35,11 @@ authRouter.post("/login", async (req, res, next) => {
     const valid = await bcrypt.compare(input.password, user.password_hash);
     if (!valid) {
       res.status(401).json({ message: "Credenciales inválidas" });
+      return;
+    }
+
+    if (!user.is_active) {
+      res.status(403).json({ message: "Tu cuenta está desactivada. Contacta al administrador de la polla." });
       return;
     }
 

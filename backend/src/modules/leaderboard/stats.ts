@@ -13,7 +13,9 @@ export interface LeaderboardRow {
 }
 
 export async function fetchLeaderboard(includeAllRoles = false): Promise<LeaderboardRow[]> {
-  const roleFilter = includeAllRoles ? "" : "WHERE u.role = 'USER'";
+  const roleFilter = includeAllRoles
+    ? "WHERE u.is_active = TRUE"
+    : "WHERE u.role = 'USER' AND u.is_active = TRUE";
 
   const result = await pool.query(
     `SELECT

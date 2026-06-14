@@ -12,8 +12,59 @@ interface PollaUser {
   role: string;
   amountPaid: number;
   paymentNotes: string | null;
+  isActive: boolean;
   totalPoints: number;
   predictionsCount: number;
+}
+
+type SortKey = "email" | "displayName" | "amountPaid" | "totalPoints" | "predictionsCount" | "isActive";
+type SortDir = "asc" | "desc";
+
+function compareUsers(a: PollaUser, b: PollaUser, key: SortKey): number {
+  if (key === "email" || key === "displayName") {
+    return String(a[key] ?? "").localeCompare(String(b[key] ?? ""), "es", {
+      numeric: true,
+      sensitivity: "base"
+    });
+  }
+  if (key === "isActive") {
+    return Number(a.isActive) - Number(b.isActive);
+  }
+  return Number(a[key]) - Number(b[key]);
+}
+
+function rowClass(user: PollaUser): string {
+  if (!user.isActive) return "user-row--inactive";
+  if (user.role !== "ADMIN" && user.amountPaid <= 0) return "user-row--unpaid";
+  return "";
+}
+
+function SortableTh({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort
+}: {
+  label: string;
+  col: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sortKey === col;
+  return (
+    <th
+      className={`sortable-th${active ? " sortable-th--active" : ""}`}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      onClick={() => onSort(col)}
+    >
+      {label}
+      <span className="sort-arrow" aria-hidden="true">
+        {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+      </span>
+    </th>
+  );
 }
 
 function formatMoney(n: number): string {
@@ -49,6 +100,9 @@ export function AdminUsersPage() {
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("email");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
@@ -77,7 +131,47 @@ export function AdminUsersPage() {
     loadUsers();
   }, [loadUsers]);
 
-  const filteredUsers = useMemo(() => users.filter((u) => matchesSearch(u, search)), [users, search]);
+  const inactiveCount = useMemo(() => users.filter((u) => !u.isActive).length, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const filtered = users.filter((u) => (showInactive || u.isActive) && matchesSearch(u, search));
+    return filtered.sort((a, b) => {
+      const cmp = compareUsers(a, b, sortKey);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [users, search, showInactive, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  async function toggleActive(user: PollaUser) {
+    if (
+      user.isActive &&
+      !window.confirm(
+        `¿Desactivar a ${user.displayName || user.email}? No podrá iniciar sesión ni aparecer en el ranking.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api(`/admin/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !user.isActive })
+      });
+      setIsError(false);
+      setMessage(user.isActive ? "Usuario desactivado" : "Usuario activado");
+      loadUsers();
+    } catch (e) {
+      setIsError(true);
+      setMessage((e as Error).message);
+    }
+  }
 
   function openCreate() {
     setCreateForm(emptyCreateForm());
@@ -185,14 +279,24 @@ export function AdminUsersPage() {
               autoComplete="off"
             />
           </div>
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            Nuevo participante
-          </button>
+          <div className="admin-users-actions">
+            <label className="admin-users-toggle">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Mostrar inactivos{inactiveCount > 0 ? ` (${inactiveCount})` : ""}
+            </label>
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              Nuevo participante
+            </button>
+          </div>
         </div>
 
         <h2 style={{ fontSize: "1.15rem", marginBottom: "1rem" }}>
           Participantes ({filteredUsers.length}
-          {search.trim() ? ` de ${users.length}` : ""})
+          {filteredUsers.length !== users.length ? ` de ${users.length}` : ""})
         </h2>
 
         {loading ? (
@@ -204,17 +308,18 @@ export function AdminUsersPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Código</th>
-                  <th>Nombre</th>
-                  <th>Pagado</th>
-                  <th>Puntos</th>
-                  <th>Predicciones</th>
+                  <SortableTh label="Código" col="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Nombre" col="displayName" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Pagado" col="amountPaid" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Puntos" col="totalPoints" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Predicciones" col="predictionsCount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Estado" col="isActive" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((u) => (
-                  <tr key={u.id}>
+                  <tr key={u.id} className={rowClass(u)}>
                     <td>
                       <code className="user-code">{u.email}</code>
                       {u.role === "ADMIN" && (
@@ -224,20 +329,46 @@ export function AdminUsersPage() {
                       )}
                     </td>
                     <td>{u.displayName || <span className="text-muted">—</span>}</td>
-                    <td>{formatMoney(u.amountPaid)}</td>
+                    <td>
+                      {formatMoney(u.amountPaid)}
+                      {u.isActive && u.role !== "ADMIN" && u.amountPaid <= 0 && (
+                        <span className="badge badge-unpaid" style={{ marginLeft: 6 }}>
+                          Sin pago
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <strong style={{ fontFamily: "var(--font-serif)", fontSize: "1.1rem" }}>{u.totalPoints}</strong>
                     </td>
                     <td>{u.predictionsCount}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
-                        onClick={() => openEdit(u)}
-                      >
-                        Editar
-                      </button>
+                      {u.isActive ? (
+                        <span className="badge badge-active">Activo</span>
+                      ) : (
+                        <span className="badge badge-inactive">Inactivo</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
+                          onClick={() => openEdit(u)}
+                        >
+                          Editar
+                        </button>
+                        {u.role !== "ADMIN" && (
+                          <button
+                            type="button"
+                            className={`btn ${u.isActive ? "btn-danger" : "btn-primary"}`}
+                            style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
+                            onClick={() => toggleActive(u)}
+                          >
+                            {u.isActive ? "Desactivar" : "Activar"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -21,7 +21,8 @@ const updateUserSchema = z.object({
   displayName: z.string().min(1).max(120).nullable().optional(),
   amountPaid: z.number().min(0).optional(),
   paymentNotes: z.string().max(500).nullable().optional(),
-  password: z.string().min(6).optional()
+  password: z.string().min(6).optional(),
+  isActive: z.boolean().optional()
 });
 
 const adminPredictionSchema = z.object({
@@ -43,6 +44,7 @@ adminUsersRouter.get("/", async (_req, res, next) => {
         u.role,
         u.amount_paid,
         u.payment_notes,
+        u.is_active,
         u.created_at,
         COALESCE(SUM(ps.points), 0)::int AS total_points,
         COUNT(DISTINCT p.id)::int AS predictions_count
@@ -60,6 +62,7 @@ adminUsersRouter.get("/", async (_req, res, next) => {
         role: row.role,
         amountPaid: Number(row.amount_paid),
         paymentNotes: row.payment_notes,
+        isActive: row.is_active,
         createdAt: row.created_at,
         totalPoints: row.total_points,
         predictionsCount: row.predictions_count
@@ -78,7 +81,7 @@ adminUsersRouter.post("/", async (req, res, next) => {
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, role, display_name, amount_paid, payment_notes)
       VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, email, display_name, role, amount_paid, payment_notes, created_at`,
+      RETURNING id, email, display_name, role, amount_paid, payment_notes, is_active, created_at`,
       [
         login,
         passwordHash,
@@ -96,6 +99,7 @@ adminUsersRouter.post("/", async (req, res, next) => {
       role: row.role,
       amountPaid: Number(row.amount_paid),
       paymentNotes: row.payment_notes,
+      isActive: row.is_active,
       createdAt: row.created_at,
       totalPoints: 0,
       predictionsCount: 0
@@ -109,6 +113,18 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const input = updateUserSchema.parse(req.body);
+
+    if (input.isActive === false) {
+      const target = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+      if (!target.rows[0]) {
+        res.status(404).json({ message: "Usuario no encontrado" });
+        return;
+      }
+      if (target.rows[0].role === "ADMIN") {
+        res.status(400).json({ message: "No puedes desactivar a un administrador" });
+        return;
+      }
+    }
 
     if (input.password) {
       const passwordHash = await bcrypt.hash(input.password, 10);
@@ -129,6 +145,10 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
       params.push(input.paymentNotes);
       sets.push(`payment_notes = $${params.length}`);
     }
+    if (input.isActive !== undefined) {
+      params.push(input.isActive);
+      sets.push(`is_active = $${params.length}`);
+    }
 
     if (sets.length === 0 && !input.password) {
       res.status(400).json({ message: "Nada que actualizar" });
@@ -140,12 +160,12 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
       params.push(userId);
       result = await pool.query(
         `UPDATE users SET ${sets.join(", ")} WHERE id = $${params.length}
-        RETURNING id, email, display_name, role, amount_paid, payment_notes, created_at`,
+        RETURNING id, email, display_name, role, amount_paid, payment_notes, is_active, created_at`,
         params
       );
     } else {
       result = await pool.query(
-        "SELECT id, email, display_name, role, amount_paid, payment_notes, created_at FROM users WHERE id = $1",
+        "SELECT id, email, display_name, role, amount_paid, payment_notes, is_active, created_at FROM users WHERE id = $1",
         [userId]
       );
     }
@@ -170,6 +190,7 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
       role: row.role,
       amountPaid: Number(row.amount_paid),
       paymentNotes: row.payment_notes,
+      isActive: row.is_active,
       createdAt: row.created_at,
       totalPoints: stats.rows[0].total_points,
       predictionsCount: stats.rows[0].predictions_count

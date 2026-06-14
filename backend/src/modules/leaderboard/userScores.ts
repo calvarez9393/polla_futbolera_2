@@ -311,7 +311,7 @@ export async function fetchUserScores(userId: number) {
 
 export async function isLeaderboardParticipant(userId: number): Promise<boolean> {
   const result = await pool.query(
-    `SELECT 1 FROM users WHERE id = $1 AND role = 'USER' LIMIT 1`,
+    `SELECT 1 FROM users WHERE id = $1 AND role = 'USER' AND is_active = TRUE LIMIT 1`,
     [userId]
   );
   return result.rowCount !== null && result.rowCount > 0;

@@ -56,6 +56,7 @@ adminMatchScoringRouter.get("/matches/:id/scoring", async (req, res, next) => {
       `SELECT u.id AS user_id, u.email, u.display_name
       FROM users u
       WHERE u.role IN ('USER', 'ADMIN')
+        AND u.is_active = TRUE
         AND NOT EXISTS (SELECT 1 FROM predictions p WHERE p.user_id = u.id AND p.match_id = $1)
       ORDER BY u.display_name, u.email`,
       [matchId]
