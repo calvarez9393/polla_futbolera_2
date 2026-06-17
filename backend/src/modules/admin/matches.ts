@@ -57,6 +57,9 @@ const settingsSchema = z
     { message: "La fecha de apertura de goleador/asistidor debe ser anterior o igual a la de cierre" }
   );
 
+/** Clave requerida para borrar un resultado o cambiar el multiplicador de puntos de un partido. */
+const RESULT_PASSWORD = "daniel";
+
 export const adminMatchesRouter = Router();
 adminMatchesRouter.use(requireAuth, requireAdmin);
 
@@ -262,17 +265,28 @@ adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
         status: z.enum(["NOT_STARTED", "LIVE", "FINISHED"]),
         home_score: z.coerce.number().int().min(0).nullable(),
         away_score: z.coerce.number().int().min(0).nullable(),
-        winner_team_id: optionalTeamId
+        winner_team_id: optionalTeamId,
+        // Factor multiplicador de puntos del partido. Cambiarlo exige la clave.
+        score_multiplier: z.coerce.number().min(0).max(100).optional(),
+        password: z.string().optional()
       })
       .parse(req.body);
 
     const existing = await pool.query(
-      "SELECT id, stage, home_team_id, away_team_id, winner_team_id FROM matches WHERE id = $1",
+      "SELECT id, stage, home_team_id, away_team_id, winner_team_id, score_multiplier FROM matches WHERE id = $1",
       [req.params.id]
     );
     const m = existing.rows[0];
     if (!m) {
       res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+
+    const currentMultiplier = Number(m.score_multiplier ?? 1);
+    const newMultiplier = input.score_multiplier ?? currentMultiplier;
+    const multiplierChanged = Math.abs(newMultiplier - currentMultiplier) > 1e-9;
+    if (multiplierChanged && input.password !== RESULT_PASSWORD) {
+      res.status(403).json({ message: "Clave incorrecta para cambiar el multiplicador" });
       return;
     }
 
@@ -288,10 +302,11 @@ adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
 
     const result = await pool.query(
       `UPDATE matches SET
-        status = $1, home_score = $2, away_score = $3, winner_team_id = $4, updated_at = NOW()
-      WHERE id = $5
+        status = $1, home_score = $2, away_score = $3, winner_team_id = $4,
+        score_multiplier = $5, updated_at = NOW()
+      WHERE id = $6
       RETURNING *`,
-      [input.status, input.home_score, input.away_score, winnerId, req.params.id]
+      [input.status, input.home_score, input.away_score, winnerId, newMultiplier, req.params.id]
     );
 
     if (input.status === "FINISHED") {
@@ -310,14 +325,12 @@ adminMatchesRouter.patch("/matches/:id/result", async (req, res, next) => {
   }
 });
 
-/** Clave requerida para borrar el resultado de un partido. */
-const DELETE_RESULT_PASSWORD = "daniel";
 const deleteResultSchema = z.object({ password: z.string().min(1) });
 
 adminMatchesRouter.delete("/matches/:id/result", async (req, res, next) => {
   try {
     const { password } = deleteResultSchema.parse(req.body ?? {});
-    if (password !== DELETE_RESULT_PASSWORD) {
+    if (password !== RESULT_PASSWORD) {
       res.status(403).json({ message: "Clave incorrecta" });
       return;
     }

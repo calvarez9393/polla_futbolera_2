@@ -14,6 +14,23 @@ interface ScoredPoints {
   breakdown: Record<string, number>;
 }
 
+/**
+ * Aplica el factor multiplicador del partido a los puntos calculados. Escala cada
+ * componente del desglose (que siempre suma el total) para que las fichas de puntos y
+ * el total sigan siendo coherentes. Con factor 1 devuelve los puntos sin tocar.
+ */
+function applyScoreMultiplier(scored: ScoredPoints, multiplier: number): ScoredPoints {
+  if (Number.isFinite(multiplier) && multiplier !== 1) {
+    const breakdown: Record<string, number> = {};
+    for (const [key, value] of Object.entries(scored.breakdown)) {
+      breakdown[key] = Math.round(value * multiplier);
+    }
+    const points = Object.values(breakdown).reduce((sum, value) => sum + value, 0);
+    return { points, breakdown };
+  }
+  return scored;
+}
+
 async function scoreKnockoutPrediction(
   match: Record<string, any>,
   prediction: Record<string, any>,
@@ -109,6 +126,7 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
 
   const isKnockout = match.stage === "KNOCKOUT";
   const tbdId = isKnockout ? await getTbdTeamId() : null;
+  const multiplier = Number(match.score_multiplier ?? 1) || 1;
 
   let officialWinnerId = match.winner_team_id != null ? Number(match.winner_team_id) : null;
   if (isKnockout && !officialWinnerId && match.home_score !== match.away_score) {
@@ -119,7 +137,7 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
   }
 
   for (const prediction of predictions.rows) {
-    const scored: ScoredPoints =
+    const baseScored: ScoredPoints =
       isKnockout && tbdId != null
         ? await scoreKnockoutPrediction(match, prediction, officialWinnerId, tbdId, rules)
         : computePredictionPoints({
@@ -134,6 +152,7 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
             winnerTeamId: officialWinnerId,
             rules
           });
+    const scored = applyScoreMultiplier(baseScored, multiplier);
 
     await pool.query(
       `INSERT INTO prediction_scores (user_id, source_type, source_id, points, breakdown)

@@ -13,6 +13,7 @@ export const matchSelectFields = `
   m.home_score,
   m.away_score,
   m.winner_team_id,
+  m.score_multiplier,
   m.group_id,
   g.name AS group_name,
   ht.id AS home_team_id,

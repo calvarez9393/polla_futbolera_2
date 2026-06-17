@@ -35,6 +35,7 @@ interface CalendarMatch {
   homeScore: number | null;
   awayScore: number | null;
   winnerTeamId?: number | null;
+  scoreMultiplier?: number | null;
 }
 
 type ResultFilter = "all" | "pending" | "finished" | "live";
@@ -481,9 +482,13 @@ function AdminMatchCard({
   const initialTime =
     match.kickoffTimeLocal?.slice(0, 5) ?? new Date(match.startsAt).toISOString().slice(11, 16);
 
+  const initialMultiplier = match.scoreMultiplier ?? 1;
+
   const [simHome, setSimHome] = useState(match.homeScore ?? 0);
   const [simAway, setSimAway] = useState(match.awayScore ?? 0);
   const [penaltyWinnerId, setPenaltyWinnerId] = useState<number | "">(match.winnerTeamId ?? "");
+  const [multiplier, setMultiplier] = useState(initialMultiplier);
+  const [multiplierPassword, setMultiplierPassword] = useState("");
   const [savingResult, setSavingResult] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [showDelete, setShowDelete] = useState(false);
@@ -500,11 +505,14 @@ function AdminMatchCard({
   const isKnockout = match.stage === "KNOCKOUT";
   const isDraw = simHome === simAway;
   const nextLabel = nextRoundLabel(match.roundKey);
+  const multiplierChanged = Math.abs(multiplier - initialMultiplier) > 1e-9;
 
   useEffect(() => {
     setSimHome(match.homeScore ?? 0);
     setSimAway(match.awayScore ?? 0);
     setPenaltyWinnerId(match.winnerTeamId ?? "");
+    setMultiplier(match.scoreMultiplier ?? 1);
+    setMultiplierPassword("");
     setSchedDate(initialDate);
     setSchedTime(initialTime);
     setSchedMsg("");
@@ -539,6 +547,11 @@ function AdminMatchCard({
       setLocalMsg("En empate indica el ganador en penales (quién pasa de ronda)");
       return;
     }
+    const multiplierChanged = Math.abs(multiplier - initialMultiplier) > 1e-9;
+    if (multiplierChanged && !multiplierPassword) {
+      setLocalMsg("Escribe la clave para cambiar el multiplicador de puntos");
+      return;
+    }
     setSavingResult(true);
     setLocalMsg("");
     try {
@@ -555,10 +568,13 @@ function AdminMatchCard({
           status: "FINISHED",
           home_score: simHome,
           away_score: simAway,
-          ...(winnerTeamId != null ? { winner_team_id: winnerTeamId } : {})
+          score_multiplier: multiplier,
+          ...(winnerTeamId != null ? { winner_team_id: winnerTeamId } : {}),
+          ...(multiplierChanged ? { password: multiplierPassword } : {})
         })
       });
       setLocalMsg("Partido finalizado: puntos, ranking y tablas actualizados");
+      setMultiplierPassword("");
       setShowParticipants(true);
       onSaved();
     } catch (e) {
@@ -632,6 +648,9 @@ function AdminMatchCard({
           return acc;
         }, [])}
         {match.status === "FINISHED" && <span className="badge badge-finished"> Finalizado</span>}
+        {initialMultiplier !== 1 && (
+          <span className="badge badge-multiplier"> Puntos ×{initialMultiplier}</span>
+        )}
       </p>
 
       <div className="admin-match-block" style={{ marginBottom: "1rem" }}>
@@ -728,6 +747,35 @@ function AdminMatchCard({
             Pasa a {nextLabel}:{" "}
             <strong>{simHome > simAway ? match.homeTeamName : match.awayTeamName}</strong>
           </p>
+        )}
+        <div className="field" style={{ marginTop: "0.75rem" }}>
+          <label>Multiplicador de puntos (todos los participantes)</label>
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={multiplier}
+            onChange={(e) => setMultiplier(Number(e.target.value))}
+          />
+          <small className="admin-block-hint">
+            Los puntos de este partido se multiplican por este factor (1 = normal). Cambiarlo exige la
+            clave.
+          </small>
+        </div>
+        {multiplierChanged && (
+          <div className="field" style={{ marginTop: "0.5rem" }}>
+            <label>Clave para cambiar el multiplicador</label>
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder="Clave"
+              value={multiplierPassword}
+              onChange={(e) => setMultiplierPassword(e.target.value)}
+            />
+          </div>
         )}
         <button
           type="button"

@@ -1556,6 +1556,12 @@ p {
   border: 1px solid var(--badge-scheduled-border);
 }
 
+.badge-multiplier {
+  background: color-mix(in srgb, var(--status-live) 20%, var(--c-900));
+  color: #fde68a;
+  border: 1px solid color-mix(in srgb, var(--status-live) 55%, transparent);
+}
+
 /* Forms */
 .auth-card {
   max-width: 420px;
