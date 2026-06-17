@@ -1,6 +1,12 @@
 import { pool } from "../../db/pool.js";
-import { predictedMatchupFromRow, officialMatchupFromRow } from "../bracket/resolveUserSlotTeams.js";
-import { matchCalendarDateSql, matchLocalScheduleParts } from "../matches/calendarDate.js";
+import {
+  predictedMatchupFromRow,
+  officialMatchupFromRow,
+} from "../bracket/resolveUserSlotTeams.js";
+import {
+  matchCalendarDateSql,
+  matchLocalScheduleParts,
+} from "../matches/calendarDate.js";
 import { getOfficialBonusResults } from "../scoring/bonuses.js";
 
 interface BonusExtrasContext {
@@ -12,7 +18,10 @@ interface BonusExtrasContext {
   topAssisterCorrect: boolean | null;
 }
 
-function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
+function formatExpertDayLabel(
+  sourceId: number,
+  breakdown: Record<string, unknown>,
+): string {
   const fromBreakdown = breakdown.date;
   if (typeof fromBreakdown === "string" && fromBreakdown.length >= 10) {
     return fromBreakdown.slice(0, 10);
@@ -32,7 +41,7 @@ function mapExtraScore(
     breakdown: Record<string, unknown>;
     updated_at: Date;
   },
-  bonusExtras?: BonusExtrasContext
+  bonusExtras?: BonusExtrasContext,
 ) {
   const breakdown = (row.breakdown ?? {}) as Record<string, unknown>;
   const base = {
@@ -40,7 +49,7 @@ function mapExtraScore(
     sourceId: row.source_id,
     points: row.points as number,
     breakdown: breakdown as Record<string, number>,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 
   switch (row.source_type) {
@@ -49,7 +58,8 @@ function mapExtraScore(
         ...base,
         section: "qualifiers" as const,
         title: "Clasificados de grupos",
-        description: "Aciertos entre los 24 directos (top 2 por grupo); el cuadro de dieciseisavos usa 32 equipos"
+        description:
+          "Aciertos entre los 24 directos (top 2 por grupo); el cuadro de dieciseisavos usa 32 equipos",
       };
     case "BONUSES":
       return {
@@ -62,7 +72,7 @@ function mapExtraScore(
         topScorerCorrect: bonusExtras?.topScorerCorrect ?? null,
         topAssisterPick: bonusExtras?.topAssisterPick ?? null,
         topAssisterOfficial: bonusExtras?.topAssisterOfficial ?? null,
-        topAssisterCorrect: bonusExtras?.topAssisterCorrect ?? null
+        topAssisterCorrect: bonusExtras?.topAssisterCorrect ?? null,
       };
     case "EXPERT_DAY": {
       const day = formatExpertDayLabel(row.source_id, breakdown);
@@ -70,7 +80,7 @@ function mapExtraScore(
         ...base,
         section: "phase1" as const,
         title: "Experto del día",
-        description: `Jornada del ${day}: acertaste el 1X2 en todos los partidos del día`
+        description: `Jornada del ${day}: acertaste el 1X2 en todos los partidos del día`,
       };
     }
     case "INVICTO":
@@ -78,34 +88,46 @@ function mapExtraScore(
         ...base,
         section: "phase1" as const,
         title: "Invicto",
-        description: `Racha de ${breakdown.maxStreak ?? 10} aciertos consecutivos de resultado (1X2)`
+        description: `Racha de ${breakdown.maxStreak ?? 10} aciertos consecutivos de resultado (1X2)`,
       };
     case "GROUP_MASTER":
       return {
         ...base,
         section: "phase1" as const,
         title: `Maestro de grupo ${breakdown.groupName ?? ""}`.trim(),
-        description: "Acertaste los 2 clasificados oficiales de este grupo"
+        description: "Acertaste los 2 clasificados oficiales de este grupo",
+      };
+    case "LATE_START":
+      return {
+        ...base,
+        section: "other" as const,
+        title: "Puntos por inicio tarde",
+        description:
+          "Puntos asignados manualmente por ingresar tarde a la polla",
       };
     default:
       return {
         ...base,
         section: "other" as const,
         title: row.source_type,
-        description: null as string | null
+        description: null as string | null,
       };
   }
 }
 
 function resolvePredictedAdvancing(
   row: Record<string, unknown>,
-  predictedMatchup: ReturnType<typeof predictedMatchupFromRow>
+  predictedMatchup: ReturnType<typeof predictedMatchupFromRow>,
 ): {
   teamName: string;
   teamLogoUrl: string | null;
   viaPenalties: boolean;
 } | null {
-  if (row.stage !== "KNOCKOUT" || row.predicted_home_score == null || !predictedMatchup) {
+  if (
+    row.stage !== "KNOCKOUT" ||
+    row.predicted_home_score == null ||
+    !predictedMatchup
+  ) {
     return null;
   }
 
@@ -116,19 +138,22 @@ function resolvePredictedAdvancing(
   if (row.predicted_advancing_team_id && row.predicted_advancing_team_name) {
     return {
       teamName: row.predicted_advancing_team_name as string,
-      teamLogoUrl: (row.predicted_advancing_team_logo_url as string | null) ?? null,
-      viaPenalties
+      teamLogoUrl:
+        (row.predicted_advancing_team_logo_url as string | null) ?? null,
+      viaPenalties,
     };
   }
 
   if (ph !== pa) {
     const homeWins = ph > pa;
     return {
-      teamName: homeWins ? predictedMatchup.homeTeamName : predictedMatchup.awayTeamName,
+      teamName: homeWins
+        ? predictedMatchup.homeTeamName
+        : predictedMatchup.awayTeamName,
       teamLogoUrl: homeWins
         ? (predictedMatchup.homeTeamLogoUrl ?? null)
         : (predictedMatchup.awayTeamLogoUrl ?? null),
-      viaPenalties: false
+      viaPenalties: false,
     };
   }
 
@@ -158,13 +183,13 @@ export async function fetchUserScores(userId: number) {
   const totalResult = await pool.query(
     `SELECT COALESCE(SUM(points), 0)::int AS total_points
     FROM prediction_scores WHERE user_id = $1`,
-    [userId]
+    [userId],
   );
   const bySourceResult = await pool.query(
     `SELECT source_type, COALESCE(SUM(points), 0)::int AS points
     FROM prediction_scores WHERE user_id = $1
     GROUP BY source_type`,
-    [userId]
+    [userId],
   );
   const matchesResult = await pool.query(
     `SELECT
@@ -215,19 +240,19 @@ export async function fetchUserScores(userId: number) {
     ORDER BY ${matchCalendarDateSql("m")} DESC,
              COALESCE(m.kickoff_time_local, to_char(m.starts_at AT TIME ZONE 'UTC', 'HH24:MI')) DESC,
              m.id DESC`,
-    [userId]
+    [userId],
   );
   const extrasResult = await pool.query(
     `SELECT source_type, source_id, points, breakdown, updated_at
     FROM prediction_scores
     WHERE user_id = $1 AND source_type <> 'MATCH'
     ORDER BY updated_at DESC`,
-    [userId]
+    [userId],
   );
   const bonusRow = await pool.query(
     `SELECT top_scorer, top_scorer_correct, top_assister, top_assister_correct
     FROM bonus_predictions WHERE user_id = $1`,
-    [userId]
+    [userId],
   );
   const official = await getOfficialBonusResults();
   const bonusExtras: BonusExtrasContext = {
@@ -236,7 +261,7 @@ export async function fetchUserScores(userId: number) {
     topScorerCorrect: bonusRow.rows[0]?.top_scorer_correct ?? null,
     topAssisterPick: bonusRow.rows[0]?.top_assister ?? null,
     topAssisterOfficial: official.topAssister ?? null,
-    topAssisterCorrect: bonusRow.rows[0]?.top_assister_correct ?? null
+    topAssisterCorrect: bonusRow.rows[0]?.top_assister_correct ?? null,
   };
 
   const totalsBySource: Record<string, number> = {};
@@ -259,38 +284,53 @@ export async function fetchUserScores(userId: number) {
         bracket_away_team_id: row.bracket_away_team_id as number | null,
         bracket_home_team_name: row.bracket_home_team_name as string | null,
         bracket_away_team_name: row.bracket_away_team_name as string | null,
-        bracket_home_team_logo_url: row.bracket_home_team_logo_url as string | null,
-        bracket_away_team_logo_url: row.bracket_away_team_logo_url as string | null,
+        bracket_home_team_logo_url: row.bracket_home_team_logo_url as
+          | string
+          | null,
+        bracket_away_team_logo_url: row.bracket_away_team_logo_url as
+          | string
+          | null,
         home_team_id: row.home_team_id,
         away_team_id: row.away_team_id,
         home_team_name: row.home_team_name as string,
         away_team_name: row.away_team_name as string,
         home_team_logo_url: row.home_team_logo_url as string | null,
-        away_team_logo_url: row.away_team_logo_url as string | null
+        away_team_logo_url: row.away_team_logo_url as string | null,
       });
 
-      const predictedAdvancing = resolvePredictedAdvancing(row, predictedMatchup);
+      const predictedAdvancing = resolvePredictedAdvancing(
+        row,
+        predictedMatchup,
+      );
       let officialAdvancing: {
         teamName: string;
         teamLogoUrl: string | null;
         viaPenalties: boolean;
       } | null = null;
-      if (row.status === "FINISHED" && row.home_score != null && row.away_score != null) {
+      if (
+        row.status === "FINISHED" &&
+        row.home_score != null &&
+        row.away_score != null
+      ) {
         const viaPenalties = row.home_score === row.away_score;
         if (row.official_advancing_team_name) {
           officialAdvancing = {
             teamName: row.official_advancing_team_name as string,
-            teamLogoUrl: (row.official_advancing_team_logo_url as string | null) ?? null,
-            viaPenalties
+            teamLogoUrl:
+              (row.official_advancing_team_logo_url as string | null) ?? null,
+            viaPenalties,
           };
         } else if (!viaPenalties) {
-          const homeWins = (row.home_score as number) > (row.away_score as number);
+          const homeWins =
+            (row.home_score as number) > (row.away_score as number);
           officialAdvancing = {
-            teamName: homeWins ? (row.home_team_name as string) : (row.away_team_name as string),
+            teamName: homeWins
+              ? (row.home_team_name as string)
+              : (row.away_team_name as string),
             teamLogoUrl: homeWins
               ? ((row.home_team_logo_url as string | null) ?? null)
               : ((row.away_team_logo_url as string | null) ?? null),
-            viaPenalties: false
+            viaPenalties: false,
           };
         }
       }
@@ -307,7 +347,7 @@ export async function fetchUserScores(userId: number) {
         home_team_name: row.home_team_name as string,
         away_team_name: row.away_team_name as string,
         home_team_logo_url: row.home_team_logo_url as string | null,
-        away_team_logo_url: row.away_team_logo_url as string | null
+        away_team_logo_url: row.away_team_logo_url as string | null,
       });
 
       const schedule = matchLocalScheduleParts(row);
@@ -336,7 +376,7 @@ export async function fetchUserScores(userId: number) {
         officialAdvancing,
         nextRoundLabel: nextRoundLabelFromKey(row.round_key as string | null),
         points: row.points,
-        breakdown: row.breakdown
+        breakdown: row.breakdown,
       };
     }),
     extras: extrasResult.rows.map((row) =>
@@ -346,18 +386,20 @@ export async function fetchUserScores(userId: number) {
           source_id: row.source_id as number,
           points: row.points as number,
           breakdown: row.breakdown as Record<string, unknown>,
-          updated_at: row.updated_at as Date
+          updated_at: row.updated_at as Date,
         },
-        bonusExtras
-      )
-    )
+        bonusExtras,
+      ),
+    ),
   };
 }
 
-export async function isLeaderboardParticipant(userId: number): Promise<boolean> {
+export async function isLeaderboardParticipant(
+  userId: number,
+): Promise<boolean> {
   const result = await pool.query(
     `SELECT 1 FROM users WHERE id = $1 AND role = 'USER' AND is_active = TRUE LIMIT 1`,
-    [userId]
+    [userId],
   );
   return result.rowCount !== null && result.rowCount > 0;
 }

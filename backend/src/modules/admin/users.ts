@@ -22,7 +22,8 @@ const updateUserSchema = z.object({
   amountPaid: z.number().min(0).optional(),
   paymentNotes: z.string().max(500).nullable().optional(),
   password: z.string().min(6).optional(),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  lateStartPoints: z.number().int().min(0).max(100000).optional()
 });
 
 const adminPredictionSchema = z.object({
@@ -30,6 +31,44 @@ const adminPredictionSchema = z.object({
   predictedHomeScore: z.coerce.number().int().min(0),
   predictedAwayScore: z.coerce.number().int().min(0)
 });
+
+function buildUserUpdateSets(input: z.infer<typeof updateUserSchema>): {
+  sets: string[];
+  params: unknown[];
+} {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const columns: Array<[unknown, string]> = [
+    [input.displayName, "display_name"],
+    [input.amountPaid, "amount_paid"],
+    [input.paymentNotes, "payment_notes"],
+    [input.isActive, "is_active"]
+  ];
+  for (const [value, column] of columns) {
+    if (value !== undefined) {
+      params.push(value);
+      sets.push(`${column} = $${params.length}`);
+    }
+  }
+  return { sets, params };
+}
+
+async function applyLateStartPoints(userId: number, points: number): Promise<void> {
+  if (points > 0) {
+    await pool.query(
+      `INSERT INTO prediction_scores (user_id, source_type, source_id, points, breakdown)
+      VALUES ($1, 'LATE_START', 0, $2, '{}'::jsonb)
+      ON CONFLICT (user_id, source_type, source_id)
+      DO UPDATE SET points = EXCLUDED.points, updated_at = NOW()`,
+      [userId, points]
+    );
+  } else {
+    await pool.query(
+      `DELETE FROM prediction_scores WHERE user_id = $1 AND source_type = 'LATE_START' AND source_id = 0`,
+      [userId]
+    );
+  }
+}
 
 export const adminUsersRouter = Router();
 adminUsersRouter.use(requireAuth, requireAdmin);
@@ -47,6 +86,7 @@ adminUsersRouter.get("/", async (_req, res, next) => {
         u.is_active,
         u.created_at,
         COALESCE(SUM(ps.points), 0)::int AS total_points,
+        COALESCE(MAX(ps.points) FILTER (WHERE ps.source_type = 'LATE_START' AND ps.source_id = 0), 0)::int AS late_start_points,
         COUNT(DISTINCT p.id)::int AS predictions_count
       FROM users u
       LEFT JOIN prediction_scores ps ON ps.user_id = u.id
@@ -65,6 +105,7 @@ adminUsersRouter.get("/", async (_req, res, next) => {
         isActive: row.is_active,
         createdAt: row.created_at,
         totalPoints: row.total_points,
+        lateStartPoints: row.late_start_points,
         predictionsCount: row.predictions_count
       }))
     );
@@ -102,6 +143,7 @@ adminUsersRouter.post("/", async (req, res, next) => {
       isActive: row.is_active,
       createdAt: row.created_at,
       totalPoints: 0,
+      lateStartPoints: 0,
       predictionsCount: 0
     });
   } catch (error) {
@@ -131,26 +173,13 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
       await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, userId]);
     }
 
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (input.displayName !== undefined) {
-      params.push(input.displayName);
-      sets.push(`display_name = $${params.length}`);
-    }
-    if (input.amountPaid !== undefined) {
-      params.push(input.amountPaid);
-      sets.push(`amount_paid = $${params.length}`);
-    }
-    if (input.paymentNotes !== undefined) {
-      params.push(input.paymentNotes);
-      sets.push(`payment_notes = $${params.length}`);
-    }
-    if (input.isActive !== undefined) {
-      params.push(input.isActive);
-      sets.push(`is_active = $${params.length}`);
+    if (input.lateStartPoints !== undefined) {
+      await applyLateStartPoints(userId, input.lateStartPoints);
     }
 
-    if (sets.length === 0 && !input.password) {
+    const { sets, params } = buildUserUpdateSets(input);
+
+    if (sets.length === 0 && !input.password && input.lateStartPoints === undefined) {
       res.status(400).json({ message: "Nada que actualizar" });
       return;
     }
@@ -178,6 +207,7 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
     const row = result.rows[0];
     const stats = await pool.query(
       `SELECT COALESCE(SUM(points), 0)::int AS total_points,
+        COALESCE(SUM(points) FILTER (WHERE source_type = 'LATE_START' AND source_id = 0), 0)::int AS late_start_points,
         (SELECT COUNT(*)::int FROM predictions WHERE user_id = $1) AS predictions_count
       FROM prediction_scores WHERE user_id = $1`,
       [userId]
@@ -193,6 +223,7 @@ adminUsersRouter.patch("/:id", async (req, res, next) => {
       isActive: row.is_active,
       createdAt: row.created_at,
       totalPoints: stats.rows[0].total_points,
+      lateStartPoints: stats.rows[0].late_start_points,
       predictionsCount: stats.rows[0].predictions_count
     });
   } catch (error) {
@@ -242,6 +273,49 @@ adminUsersRouter.put("/:userId/predictions", async (req, res, next) => {
     res.json({
       prediction: result.rows[0],
       message: "Predicción guardada"
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Marcador de solo escritura: registra un pronóstico para el usuario únicamente si
+// no existe uno previo. Nunca sobrescribe (a diferencia del PUT de arriba).
+adminUsersRouter.post("/:userId/predictions", async (req, res, next) => {
+  try {
+    const userId = Number(req.params.userId);
+    const input = adminPredictionSchema.parse(req.body);
+
+    const user = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
+    if (!user.rows[0]) {
+      res.status(404).json({ message: "Usuario no encontrado" });
+      return;
+    }
+
+    const matchResult = await pool.query("SELECT id FROM matches WHERE id = $1", [input.matchId]);
+    if (!matchResult.rows[0]) {
+      res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO predictions (user_id, match_id, predicted_home_score, predicted_away_score)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id, match_id) DO NOTHING
+      RETURNING *`,
+      [userId, input.matchId, input.predictedHomeScore, input.predictedAwayScore]
+    );
+
+    if (!result.rows[0]) {
+      res.status(409).json({
+        message: "El usuario ya tiene un marcador para este partido; solo se puede poner, no cambiar."
+      });
+      return;
+    }
+
+    res.status(201).json({
+      prediction: result.rows[0],
+      message: "Marcador guardado"
     });
   } catch (error) {
     next(error);

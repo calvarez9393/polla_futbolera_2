@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import { AdminSubnav } from "../components/AdminSubnav";
 import { InfoModal, PageTitle } from "../components/InfoModal";
 import { Modal } from "../components/Modal";
@@ -14,7 +14,24 @@ interface PollaUser {
   paymentNotes: string | null;
   isActive: boolean;
   totalPoints: number;
+  lateStartPoints: number;
   predictionsCount: number;
+}
+
+interface AdminMatchOption {
+  id: number;
+  home_team_name: string;
+  away_team_name: string;
+  starts_at: string;
+}
+
+// Clave que protege las acciones manuales (marcador y puntos por inicio tarde).
+// Se valida en el navegador: es un seguro simple, no una barrera de seguridad real.
+const ADMIN_ACTION_PASSWORD = "daniel";
+
+function matchOptionLabel(m: AdminMatchOption): string {
+  const date = new Date(m.starts_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short" });
+  return `${m.home_team_name} vs ${m.away_team_name} (${date})`;
 }
 
 type SortKey = "email" | "displayName" | "amountPaid" | "totalPoints" | "predictionsCount" | "isActive";
@@ -114,6 +131,25 @@ export function AdminUsersPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Menú de acciones por fila. "Ver más" (protegido con contraseña) revela las
+  // acciones avanzadas (marcador e inicio tarde) para el usuario indicado.
+  const [menu, setMenu] = useState<{ user: PollaUser; top: number; right: number } | null>(null);
+  const [revealExtrasId, setRevealExtrasId] = useState<PollaUser["id"] | null>(null);
+
+  // Marcador (pronóstico de un partido, solo escritura)
+  const [markerUser, setMarkerUser] = useState<PollaUser | null>(null);
+  const [matches, setMatches] = useState<AdminMatchOption[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [markerMatchId, setMarkerMatchId] = useState("");
+  const [markerHome, setMarkerHome] = useState(0);
+  const [markerAway, setMarkerAway] = useState(0);
+  const [markerSaving, setMarkerSaving] = useState(false);
+
+  // Puntos por inicio tarde (puntos manuales)
+  const [lateUser, setLateUser] = useState<PollaUser | null>(null);
+  const [lateValue, setLateValue] = useState(0);
+  const [lateSaving, setLateSaving] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -253,6 +289,111 @@ export function AdminUsersPage() {
     }
   }
 
+  const loadMatches = useCallback(async () => {
+    setMatchesLoading(true);
+    try {
+      const rows = await api<AdminMatchOption[]>("/matches");
+      setMatches(rows);
+    } catch {
+      setMatches([]);
+    } finally {
+      setMatchesLoading(false);
+    }
+  }, []);
+
+  function openMenu(event: MouseEvent<HTMLButtonElement>, user: PollaUser) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setRevealExtrasId(null);
+    setMenu({ user, top: rect.bottom + 6, right: window.innerWidth - rect.right });
+  }
+
+  function closeMenu() {
+    setMenu(null);
+  }
+
+  function revealExtras(userId: PollaUser["id"]) {
+    const pwd = window.prompt("Contraseña para acciones avanzadas (marcador e inicio tarde)");
+    if (pwd === null) return;
+    if (pwd === ADMIN_ACTION_PASSWORD) {
+      setRevealExtrasId(userId);
+    } else {
+      setIsError(true);
+      setMessage("Contraseña incorrecta");
+    }
+  }
+
+  function openMarker(user: PollaUser) {
+    setMarkerUser(user);
+    setMarkerMatchId("");
+    setMarkerHome(0);
+    setMarkerAway(0);
+    if (matches.length === 0) void loadMatches();
+  }
+
+  function closeMarker() {
+    setMarkerUser(null);
+  }
+
+  async function saveMarker(event: FormEvent) {
+    event.preventDefault();
+    if (!markerUser) return;
+    if (!markerMatchId) {
+      setIsError(true);
+      setMessage("Selecciona un partido");
+      return;
+    }
+    setMarkerSaving(true);
+    try {
+      await api(`/admin/users/${markerUser.id}/predictions`, {
+        method: "POST",
+        body: JSON.stringify({
+          matchId: Number(markerMatchId),
+          predictedHomeScore: markerHome,
+          predictedAwayScore: markerAway
+        })
+      });
+      closeMarker();
+      setIsError(false);
+      setMessage("Marcador guardado");
+      loadUsers();
+    } catch (e) {
+      setIsError(true);
+      setMessage((e as Error).message);
+    } finally {
+      setMarkerSaving(false);
+    }
+  }
+
+  function openLate(user: PollaUser) {
+    setLateUser(user);
+    setLateValue(user.lateStartPoints ?? 0);
+  }
+
+  function closeLate() {
+    setLateUser(null);
+  }
+
+  async function saveLate(event: FormEvent) {
+    event.preventDefault();
+    if (!lateUser) return;
+    setLateSaving(true);
+    try {
+      await api(`/admin/users/${lateUser.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ lateStartPoints: lateValue })
+      });
+      closeLate();
+      setIsError(false);
+      setMessage("Puntos por inicio tarde actualizados");
+      loadUsers();
+    } catch (e) {
+      setIsError(true);
+      setMessage((e as Error).message);
+    } finally {
+      setLateSaving(false);
+    }
+  }
+
   return (
     <>
       <AdminSubnav />
@@ -308,12 +449,9 @@ export function AdminUsersPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <SortableTh label="Código" col="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Nombre" col="displayName" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Usuario" col="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="Pagado" col="amountPaid" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Puntos" col="totalPoints" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="Predicciones" col="predictionsCount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Estado" col="isActive" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th></th>
                 </tr>
               </thead>
@@ -321,14 +459,21 @@ export function AdminUsersPage() {
                 {filteredUsers.map((u) => (
                   <tr key={u.id} className={rowClass(u)}>
                     <td>
-                      <code className="user-code">{u.email}</code>
-                      {u.role === "ADMIN" && (
-                        <span className="badge badge-scheduled" style={{ marginTop: 4, display: "inline-block" }}>
-                          Admin
+                      <div className="user-identity">
+                        <div className="user-identity__top">
+                          <code className="user-code">{u.email}</code>
+                          {u.role === "ADMIN" && <span className="badge badge-scheduled">Admin</span>}
+                          {u.isActive ? (
+                            <span className="badge badge-active">Activo</span>
+                          ) : (
+                            <span className="badge badge-inactive">Inactivo</span>
+                          )}
+                        </div>
+                        <span className="user-identity__name">
+                          {u.displayName || <span className="text-muted">—</span>}
                         </span>
-                      )}
+                      </div>
                     </td>
-                    <td>{u.displayName || <span className="text-muted">—</span>}</td>
                     <td>
                       {formatMoney(u.amountPaid)}
                       {u.isActive && u.role !== "ADMIN" && u.amountPaid <= 0 && (
@@ -337,37 +482,17 @@ export function AdminUsersPage() {
                         </span>
                       )}
                     </td>
-                    <td>
-                      <strong style={{ fontFamily: "var(--font-serif)", fontSize: "1.1rem" }}>{u.totalPoints}</strong>
-                    </td>
                     <td>{u.predictionsCount}</td>
-                    <td>
-                      {u.isActive ? (
-                        <span className="badge badge-active">Activo</span>
-                      ) : (
-                        <span className="badge badge-inactive">Inactivo</span>
-                      )}
-                    </td>
                     <td>
                       <div className="row-actions">
                         <button
                           type="button"
                           className="btn btn-ghost"
                           style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
-                          onClick={() => openEdit(u)}
+                          onClick={(e) => openMenu(e, u)}
                         >
-                          Editar
+                          Acciones ▾
                         </button>
-                        {u.role !== "ADMIN" && (
-                          <button
-                            type="button"
-                            className={`btn ${u.isActive ? "btn-danger" : "btn-primary"}`}
-                            style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
-                            onClick={() => toggleActive(u)}
-                          >
-                            {u.isActive ? "Desactivar" : "Activar"}
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -377,6 +502,77 @@ export function AdminUsersPage() {
           </div>
         )}
       </section>
+
+      {menu && (
+        <>
+          <div className="actions-menu__backdrop" onClick={closeMenu} role="presentation" />
+          <div className="actions-menu__list" style={{ top: menu.top, right: menu.right }}>
+            <button
+              type="button"
+              className="actions-menu__item"
+              onClick={() => {
+                const u = menu.user;
+                closeMenu();
+                openEdit(u);
+              }}
+            >
+              Editar
+            </button>
+            {menu.user.role !== "ADMIN" && (
+              <button
+                type="button"
+                className={`actions-menu__item${menu.user.isActive ? " actions-menu__item--danger" : ""}`}
+                onClick={() => {
+                  const u = menu.user;
+                  closeMenu();
+                  toggleActive(u);
+                }}
+              >
+                {menu.user.isActive ? "Desactivar" : "Activar"}
+              </button>
+            )}
+            {menu.user.role !== "ADMIN" && (
+              <>
+                <div className="actions-menu__sep" />
+                {revealExtrasId === menu.user.id ? (
+                  <>
+                    <button
+                      type="button"
+                      className="actions-menu__item"
+                      onClick={() => {
+                        const u = menu.user;
+                        closeMenu();
+                        openMarker(u);
+                      }}
+                    >
+                      Marcador
+                    </button>
+                    <button
+                      type="button"
+                      className="actions-menu__item"
+                      onClick={() => {
+                        const u = menu.user;
+                        closeMenu();
+                        openLate(u);
+                      }}
+                    >
+                      Inicio tarde
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="actions-menu__item"
+                    onClick={() => revealExtras(menu.user.id)}
+                  >
+                    Ver más…
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
 
       <Modal
         title="Nuevo participante"
@@ -513,6 +709,115 @@ export function AdminUsersPage() {
                 value={editPassword}
                 onChange={(e) => setEditPassword(e.target.value)}
               />
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        title="Poner marcador (pronóstico)"
+        open={markerUser !== null}
+        onClose={closeMarker}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={closeMarker} disabled={markerSaving}>
+              Cancelar
+            </button>
+            <button type="submit" form="marker-form" className="btn btn-primary" disabled={markerSaving}>
+              {markerSaving ? "Guardando…" : "Guardar marcador"}
+            </button>
+          </>
+        }
+      >
+        {markerUser && (
+          <form id="marker-form" className="modal-form" onSubmit={saveMarker}>
+            <p className="text-muted" style={{ marginTop: 0 }}>
+              Usuario: <code className="user-code">{markerUser.email}</code>
+              {markerUser.displayName ? ` — ${markerUser.displayName}` : ""}
+            </p>
+            <div className="field">
+              <label htmlFor="marker-match">Partido</label>
+              <select
+                id="marker-match"
+                className="input"
+                value={markerMatchId}
+                onChange={(e) => setMarkerMatchId(e.target.value)}
+                required
+              >
+                <option value="">{matchesLoading ? "Cargando partidos…" : "Selecciona un partido"}</option>
+                {matches.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {matchOptionLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="marker-home">Marcador</label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <input
+                  id="marker-home"
+                  className="input"
+                  type="number"
+                  min={0}
+                  style={{ width: "5rem" }}
+                  value={markerHome}
+                  onChange={(e) => setMarkerHome(Number(e.target.value))}
+                  aria-label="Goles local"
+                />
+                <span>-</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  style={{ width: "5rem" }}
+                  value={markerAway}
+                  onChange={(e) => setMarkerAway(Number(e.target.value))}
+                  aria-label="Goles visitante"
+                />
+              </div>
+            </div>
+            <p className="text-muted" style={{ fontSize: "0.8rem" }}>
+              El marcador solo se puede poner una vez; no se puede cambiar después.
+            </p>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        title="Puntos por inicio tarde"
+        open={lateUser !== null}
+        onClose={closeLate}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={closeLate} disabled={lateSaving}>
+              Cancelar
+            </button>
+            <button type="submit" form="late-form" className="btn btn-primary" disabled={lateSaving}>
+              {lateSaving ? "Guardando…" : "Guardar puntos"}
+            </button>
+          </>
+        }
+      >
+        {lateUser && (
+          <form id="late-form" className="modal-form" onSubmit={saveLate}>
+            <p className="text-muted" style={{ marginTop: 0 }}>
+              Usuario: <code className="user-code">{lateUser.email}</code>
+              {lateUser.displayName ? ` — ${lateUser.displayName}` : ""}
+            </p>
+            <div className="field">
+              <label htmlFor="late-points">Puntos por inicio tarde</label>
+              <input
+                id="late-points"
+                className="input"
+                type="number"
+                min={0}
+                value={lateValue}
+                onChange={(e) => setLateValue(Number(e.target.value))}
+              />
+              <p className="text-muted" style={{ fontSize: "0.8rem" }}>
+                Se suman al total del usuario. Pon 0 para quitarlos.
+              </p>
             </div>
           </form>
         )}
