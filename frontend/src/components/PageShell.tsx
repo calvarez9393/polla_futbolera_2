@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { Navbar } from "./Navbar";
+import { ExtrasReminderModal } from "./ExtrasReminderModal";
 
 export function PageShell() {
   return (
@@ -9,6 +10,7 @@ export function PageShell() {
       <main className="content">
         <Outlet />
       </main>
+      <ExtrasReminderModal />
     </div>
   );
 }

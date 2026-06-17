@@ -1317,6 +1317,35 @@ p {
   margin: 0.25rem 0 0;
 }
 
+.extras-pick-compare {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.extras-compare-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.extras-compare-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  min-width: 6.5rem;
+}
+
 .points-breakdown-list {
   list-style: none;
   padding: 0;

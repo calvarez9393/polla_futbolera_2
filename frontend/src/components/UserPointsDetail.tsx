@@ -53,6 +53,12 @@ export interface ExtraScore {
   description: string | null;
   points: number;
   breakdown: Record<string, number>;
+  topScorerPick?: string | null;
+  topScorerOfficial?: string | null;
+  topScorerCorrect?: boolean | null;
+  topAssisterPick?: string | null;
+  topAssisterOfficial?: string | null;
+  topAssisterCorrect?: boolean | null;
 }
 
 export interface UserScoresData {
@@ -168,7 +174,48 @@ function MatchPointsCard({
   );
 }
 
+function ExtrasCompareRow({
+  label,
+  pick,
+  official,
+  correct
+}: {
+  label: string;
+  pick?: string | null;
+  official?: string | null;
+  correct?: boolean | null;
+}) {
+  if (!pick?.trim() && !official?.trim()) return null;
+  let status: { text: string; ok: boolean } | null = null;
+  if (correct === true) status = { text: "✓ acertó", ok: true };
+  else if (correct === false) status = { text: "✗ no acertó", ok: false };
+
+  return (
+    <div className="extras-compare-row">
+      <span className="extras-compare-label">{label}</span>
+      <span>
+        Escribiste: <strong>{pick?.trim() || "— sin llenar —"}</strong>
+      </span>
+      <span>
+        Real: <strong>{official?.trim() || "— por definir —"}</strong>
+      </span>
+      {status && (
+        <span className={`badge ${status.ok ? "badge-live" : "badge-scheduled"}`}>{status.text}</span>
+      )}
+    </div>
+  );
+}
+
 function ExtraPointsCard({ item }: { item: ExtraScore }) {
+  const showExtrasCompare =
+    item.sourceType === "BONUSES" &&
+    Boolean(
+      item.topScorerPick?.trim() ||
+        item.topScorerOfficial?.trim() ||
+        item.topAssisterPick?.trim() ||
+        item.topAssisterOfficial?.trim()
+    );
+
   return (
     <article className="user-points-card user-points-card--extra">
       <header className="user-points-card-head">
@@ -178,6 +225,24 @@ function ExtraPointsCard({ item }: { item: ExtraScore }) {
         </div>
         <span className="user-points-card-total">+{item.points} pts</span>
       </header>
+
+      {showExtrasCompare && (
+        <div className="extras-pick-compare">
+          <ExtrasCompareRow
+            label="Goleador"
+            pick={item.topScorerPick}
+            official={item.topScorerOfficial}
+            correct={item.topScorerCorrect}
+          />
+          <ExtrasCompareRow
+            label="Máx. asistidor"
+            pick={item.topAssisterPick}
+            official={item.topAssisterOfficial}
+            correct={item.topAssisterCorrect}
+          />
+        </div>
+      )}
+
       <div className="user-points-breakdown-block">
         <h4 className="user-points-breakdown-title">Desglose por categoría</h4>
         <PointsBreakdownList breakdown={item.breakdown} />

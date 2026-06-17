@@ -1,6 +1,16 @@
 import { pool } from "../../db/pool.js";
 import { predictedMatchupFromRow, officialMatchupFromRow } from "../bracket/resolveUserSlotTeams.js";
 import { matchCalendarDateSql, matchLocalScheduleParts } from "../matches/calendarDate.js";
+import { getOfficialBonusResults } from "../scoring/bonuses.js";
+
+interface BonusExtrasContext {
+  topScorerPick: string | null;
+  topScorerOfficial: string | null;
+  topScorerCorrect: boolean | null;
+  topAssisterPick: string | null;
+  topAssisterOfficial: string | null;
+  topAssisterCorrect: boolean | null;
+}
 
 function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknown>): string {
   const fromBreakdown = breakdown.date;
@@ -14,13 +24,16 @@ function formatExpertDayLabel(sourceId: number, breakdown: Record<string, unknow
   return raw;
 }
 
-function mapExtraScore(row: {
-  source_type: string;
-  source_id: number;
-  points: number;
-  breakdown: Record<string, unknown>;
-  updated_at: Date;
-}) {
+function mapExtraScore(
+  row: {
+    source_type: string;
+    source_id: number;
+    points: number;
+    breakdown: Record<string, unknown>;
+    updated_at: Date;
+  },
+  bonusExtras?: BonusExtrasContext
+) {
   const breakdown = (row.breakdown ?? {}) as Record<string, unknown>;
   const base = {
     sourceType: row.source_type,
@@ -43,7 +56,13 @@ function mapExtraScore(row: {
         ...base,
         section: "bonuses" as const,
         title: "Cuadro y premios especiales",
-        description: "Campeón, finalistas, goleador y premios del cuadro"
+        description: "Campeón, finalistas, goleador y premios del cuadro",
+        topScorerPick: bonusExtras?.topScorerPick ?? null,
+        topScorerOfficial: bonusExtras?.topScorerOfficial ?? null,
+        topScorerCorrect: bonusExtras?.topScorerCorrect ?? null,
+        topAssisterPick: bonusExtras?.topAssisterPick ?? null,
+        topAssisterOfficial: bonusExtras?.topAssisterOfficial ?? null,
+        topAssisterCorrect: bonusExtras?.topAssisterCorrect ?? null
       };
     case "EXPERT_DAY": {
       const day = formatExpertDayLabel(row.source_id, breakdown);
@@ -205,6 +224,20 @@ export async function fetchUserScores(userId: number) {
     ORDER BY updated_at DESC`,
     [userId]
   );
+  const bonusRow = await pool.query(
+    `SELECT top_scorer, top_scorer_correct, top_assister, top_assister_correct
+    FROM bonus_predictions WHERE user_id = $1`,
+    [userId]
+  );
+  const official = await getOfficialBonusResults();
+  const bonusExtras: BonusExtrasContext = {
+    topScorerPick: bonusRow.rows[0]?.top_scorer ?? null,
+    topScorerOfficial: official.topScorer ?? null,
+    topScorerCorrect: bonusRow.rows[0]?.top_scorer_correct ?? null,
+    topAssisterPick: bonusRow.rows[0]?.top_assister ?? null,
+    topAssisterOfficial: official.topAssister ?? null,
+    topAssisterCorrect: bonusRow.rows[0]?.top_assister_correct ?? null
+  };
 
   const totalsBySource: Record<string, number> = {};
   for (const row of bySourceResult.rows) {
@@ -307,13 +340,16 @@ export async function fetchUserScores(userId: number) {
       };
     }),
     extras: extrasResult.rows.map((row) =>
-      mapExtraScore({
-        source_type: row.source_type as string,
-        source_id: row.source_id as number,
-        points: row.points as number,
-        breakdown: row.breakdown as Record<string, unknown>,
-        updated_at: row.updated_at as Date
-      })
+      mapExtraScore(
+        {
+          source_type: row.source_type as string,
+          source_id: row.source_id as number,
+          points: row.points as number,
+          breakdown: row.breakdown as Record<string, unknown>,
+          updated_at: row.updated_at as Date
+        },
+        bonusExtras
+      )
     )
   };
 }

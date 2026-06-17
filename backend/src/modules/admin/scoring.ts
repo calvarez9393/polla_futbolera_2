@@ -2,10 +2,10 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../../middlewares/auth.js";
 import {
-  calculateBonusScores,
+  getBonusExtrasReview,
   getOfficialBonusResults,
-  setOfficialBonusResults,
-  type OfficialBonusResults
+  saveBonusExtrasMarks,
+  setOfficialBonusResults
 } from "../scoring/bonuses.js";
 import {
   calculateQualifierScores,
@@ -105,8 +105,48 @@ adminScoringRouter.get("/official/bonuses", async (_req, res, next) => {
 adminScoringRouter.put("/official/bonuses", async (req, res, next) => {
   try {
     const input = officialBonusesSchema.parse(req.body);
-    await setOfficialBonusResults(input as OfficialBonusResults);
+    // Merge so guardar el cuadro no borre el goleador/asistidor (que se editan en su propio panel).
+    const prev = await getOfficialBonusResults();
+    await setOfficialBonusResults({ ...prev, ...input });
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const bonusExtrasReviewSchema = z.object({
+  topScorer: z.string().max(120).nullable().optional(),
+  topAssister: z.string().max(120).nullable().optional(),
+  marks: z
+    .array(
+      z.object({
+        userId: z.coerce.number().int().positive(),
+        topScorerCorrect: z.boolean().nullable(),
+        topAssisterCorrect: z.boolean().nullable()
+      })
+    )
+    .default([])
+});
+
+adminScoringRouter.get("/official/bonus-extras-review", async (_req, res, next) => {
+  try {
+    res.json(await getBonusExtrasReview());
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminScoringRouter.put("/official/bonus-extras-review", async (req, res, next) => {
+  try {
+    const input = bonusExtrasReviewSchema.parse(req.body);
+    const prev = await getOfficialBonusResults();
+    await setOfficialBonusResults({
+      ...prev,
+      topScorer: input.topScorer?.trim() || null,
+      topAssister: input.topAssister?.trim() || null
+    });
+    await saveBonusExtrasMarks(input.marks);
+    res.json(await getBonusExtrasReview());
   } catch (error) {
     next(error);
   }

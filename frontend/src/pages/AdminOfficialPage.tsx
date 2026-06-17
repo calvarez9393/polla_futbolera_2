@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { AdminSubnav } from "../components/AdminSubnav";
 import { PageTitle, SectionTitle } from "../components/InfoModal";
 import { AdminR16BracketEditor } from "../components/AdminR16BracketEditor";
+import { AdminBonusExtrasReview } from "../components/AdminBonusExtrasReview";
 import { TeamFlag } from "../components/TeamFlag";
 import { api } from "../lib/api";
 
@@ -143,12 +144,16 @@ export function AdminOfficialPage() {
   async function saveBonuses(e: FormEvent) {
     e.preventDefault();
     try {
+      // El goleador/asistidor se editan en su propio panel; el endpoint hace merge
+      // así que aquí solo enviamos el cuadro y no los pisamos.
       await api("/admin/official/bonuses", {
         method: "PUT",
         body: JSON.stringify({
-          ...bonuses,
-          topScorer: bonuses.topScorer?.trim() || null,
-          topAssister: bonuses.topAssister?.trim() || null
+          championTeamId: bonuses.championTeamId ?? null,
+          runnerUpTeamId: bonuses.runnerUpTeamId ?? null,
+          thirdPlaceTeamId: bonuses.thirdPlaceTeamId ?? null,
+          semifinalistTeamIds: bonuses.semifinalistTeamIds ?? [],
+          finalistTeamIds: bonuses.finalistTeamIds ?? []
         })
       });
       setIsError(false);
@@ -245,7 +250,7 @@ export function AdminOfficialPage() {
             />
 
             <form className="panel-card" onSubmit={saveBonuses} style={{ marginBottom: "1.25rem" }}>
-              <h3 style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}>Campeón, final y premios especiales</h3>
+              <h3 style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}>Campeón y cuadro final</h3>
               <div className="field">
                 <label>Campeón</label>
                 <select
@@ -325,22 +330,6 @@ export function AdminOfficialPage() {
                   </button>
                 ))}
               </div>
-              <div className="field" style={{ marginTop: "1rem" }}>
-                <label>Goleador del mundial</label>
-                <input
-                  className="input"
-                  value={bonuses.topScorer ?? ""}
-                  onChange={(e) => setBonuses((b) => ({ ...b, topScorer: e.target.value }))}
-                />
-              </div>
-              <div className="field">
-                <label>Máximo asistidor</label>
-                <input
-                  className="input"
-                  value={bonuses.topAssister ?? ""}
-                  onChange={(e) => setBonuses((b) => ({ ...b, topAssister: e.target.value }))}
-                />
-              </div>
               <button type="submit" className="btn btn-primary" style={{ marginTop: "0.75rem" }}>
                 Guardar cuadro oficial
               </button>
@@ -353,6 +342,13 @@ export function AdminOfficialPage() {
                 Calcular puntos cuadro/premios
               </button>
             </form>
+
+            <AdminBonusExtrasReview
+              onMessage={(msg, err) => {
+                setMessage(msg);
+                setIsError(err);
+              }}
+            />
           </section>
 
           <section className="admin-official-phase">

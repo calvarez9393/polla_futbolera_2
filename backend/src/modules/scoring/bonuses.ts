@@ -31,6 +31,82 @@ function capPoints(raw: number, max: number): number {
   return Math.min(raw, max);
 }
 
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export interface BonusExtrasReviewParticipant {
+  userId: number;
+  userLabel: string;
+  topScorer: string | null;
+  topScorerCorrect: boolean | null;
+  topScorerExactMatch: boolean;
+  topAssister: string | null;
+  topAssisterCorrect: boolean | null;
+  topAssisterExactMatch: boolean;
+}
+
+export interface BonusExtrasReview {
+  topScorer: string | null;
+  topAssister: string | null;
+  participants: BonusExtrasReviewParticipant[];
+}
+
+/** Goleador/asistidor reales + lo que escribió cada participante, para revisión manual del admin. */
+export async function getBonusExtrasReview(): Promise<BonusExtrasReview> {
+  const official = await getOfficialBonusResults();
+  const offScorer = normalizeName(official.topScorer);
+  const offAssister = normalizeName(official.topAssister);
+  const { rows } = await pool.query(
+    `SELECT u.id AS user_id, u.display_name, u.email,
+            bp.top_scorer, bp.top_scorer_correct,
+            bp.top_assister, bp.top_assister_correct
+     FROM users u
+     LEFT JOIN bonus_predictions bp ON bp.user_id = u.id
+     WHERE u.role = 'USER' AND u.is_active = TRUE
+     ORDER BY u.display_name NULLS LAST, u.email`
+  );
+  return {
+    topScorer: official.topScorer ?? null,
+    topAssister: official.topAssister ?? null,
+    participants: rows.map((row) => {
+      const scorer = (row.top_scorer as string | null) ?? null;
+      const assister = (row.top_assister as string | null) ?? null;
+      return {
+        userId: Number(row.user_id),
+        userLabel: String(row.display_name ?? row.email ?? row.user_id),
+        topScorer: scorer,
+        topScorerCorrect: (row.top_scorer_correct as boolean | null) ?? null,
+        topScorerExactMatch: offScorer.length > 0 && normalizeName(scorer) === offScorer,
+        topAssister: assister,
+        topAssisterCorrect: (row.top_assister_correct as boolean | null) ?? null,
+        topAssisterExactMatch: offAssister.length > 0 && normalizeName(assister) === offAssister
+      };
+    })
+  };
+}
+
+export interface BonusExtrasMark {
+  userId: number;
+  topScorerCorrect: boolean | null;
+  topAssisterCorrect: boolean | null;
+}
+
+/** Guarda, por participante, si acertó goleador y/o máximo asistidor. */
+export async function saveBonusExtrasMarks(marks: BonusExtrasMark[]): Promise<number> {
+  let updated = 0;
+  for (const mark of marks) {
+    const result = await pool.query(
+      `UPDATE bonus_predictions
+       SET top_scorer_correct = $2, top_assister_correct = $3
+       WHERE user_id = $1`,
+      [mark.userId, mark.topScorerCorrect, mark.topAssisterCorrect]
+    );
+    updated += result.rowCount ?? 0;
+  }
+  return updated;
+}
+
 function parseIdArray(raw: unknown): number[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((v) => Number(v)).filter((id) => id > 0 && !Number.isNaN(id));
@@ -241,15 +317,15 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
       points += finalCmp.points;
     }
 
-    if (official.topScorer && row.top_scorer?.trim().toLowerCase() === official.topScorer.trim().toLowerCase()) {
+    // Goleador y máximo asistidor: el admin marca manualmente quién acertó
+    // (las personas escriben el nombre de formas distintas), así que el puntaje
+    // depende de la marca, no de un match de texto exacto.
+    if (official.topScorer?.trim() && row.top_scorer_correct === true) {
       breakdown.topScorer = rules.top_scorer_points;
       points += rules.top_scorer_points;
     }
 
-    if (
-      official.topAssister &&
-      row.top_assister?.trim().toLowerCase() === official.topAssister.trim().toLowerCase()
-    ) {
+    if (official.topAssister?.trim() && row.top_assister_correct === true) {
       breakdown.topAssister = rules.top_assister_points;
       points += rules.top_assister_points;
     }
