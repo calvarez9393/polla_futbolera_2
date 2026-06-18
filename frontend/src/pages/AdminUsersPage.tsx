@@ -23,6 +23,7 @@ interface AdminMatchOption {
   home_team_name: string;
   away_team_name: string;
   starts_at: string;
+  status: string;
 }
 
 // Clave que protege las acciones manuales (marcador y puntos por inicio tarde).
@@ -137,7 +138,7 @@ export function AdminUsersPage() {
   const [menu, setMenu] = useState<{ user: PollaUser; top: number; right: number } | null>(null);
   const [revealExtrasId, setRevealExtrasId] = useState<PollaUser["id"] | null>(null);
 
-  // Marcador (pronóstico de un partido, solo escritura)
+  // Marcador (pronóstico de un partido; se puede poner o modificar si no ha finalizado)
   const [markerUser, setMarkerUser] = useState<PollaUser | null>(null);
   const [matches, setMatches] = useState<AdminMatchOption[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
@@ -312,7 +313,7 @@ export function AdminUsersPage() {
   }
 
   function revealExtras(userId: PollaUser["id"]) {
-    const pwd = window.prompt("Contraseña para acciones avanzadas (marcador e inicio tarde)");
+    const pwd = window.prompt("Contraseña para acciones avanzadas");
     if (pwd === null) return;
     if (pwd === ADMIN_ACTION_PASSWORD) {
       setRevealExtrasId(userId);
@@ -345,7 +346,7 @@ export function AdminUsersPage() {
     setMarkerSaving(true);
     try {
       await api(`/admin/users/${markerUser.id}/predictions`, {
-        method: "POST",
+        method: "PUT",
         body: JSON.stringify({
           matchId: Number(markerMatchId),
           predictedHomeScore: markerHome,
@@ -715,7 +716,7 @@ export function AdminUsersPage() {
       </Modal>
 
       <Modal
-        title="Poner marcador (pronóstico)"
+        title="Poner o modificar marcador (pronóstico)"
         open={markerUser !== null}
         onClose={closeMarker}
         footer={
@@ -745,11 +746,13 @@ export function AdminUsersPage() {
                 required
               >
                 <option value="">{matchesLoading ? "Cargando partidos…" : "Selecciona un partido"}</option>
-                {matches.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {matchOptionLabel(m)}
-                  </option>
-                ))}
+                {matches
+                  .filter((m) => m.status !== "FINISHED")
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {matchOptionLabel(m)}
+                    </option>
+                  ))}
               </select>
             </div>
             <div className="field">
@@ -778,7 +781,8 @@ export function AdminUsersPage() {
               </div>
             </div>
             <p className="text-muted" style={{ fontSize: "0.8rem" }}>
-              El marcador solo se puede poner una vez; no se puede cambiar después.
+              Puedes poner o modificar el marcador mientras el partido no haya finalizado. Los
+              partidos ya finalizados no aparecen en la lista.
             </p>
           </form>
         )}

@@ -3,8 +3,6 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { requireAdmin, requireAuth } from "../../middlewares/auth.js";
-import { finalizeMatch } from "../scoring/finalize.js";
-import { knockoutPredictionClosedReason, loadKnockoutPredictionConfig, resolvePredictionLockAt } from "../settings/service.js";
 
 import { loginIdentifierSchema, normalizeLoginIdentifier } from "../../utils/loginIdentifier.js";
 
@@ -249,12 +247,10 @@ adminUsersRouter.put("/:userId/predictions", async (req, res, next) => {
       return;
     }
 
-    const lockAt = await resolvePredictionLockAt(match);
-    const knockoutConfig =
-      match.stage === "KNOCKOUT" ? await loadKnockoutPredictionConfig() : null;
-    const closedReason = knockoutPredictionClosedReason(match, lockAt, new Date(), knockoutConfig);
-    if (closedReason) {
-      res.status(400).json({ message: closedReason });
+    // El admin puede modificar el marcador mientras el partido no haya finalizado
+    // (incluso si ya empezó o si ya pasó el cierre de pronósticos).
+    if (match.status === "FINISHED") {
+      res.status(400).json({ message: "No puedes modificar el marcador de un partido finalizado" });
       return;
     }
 
