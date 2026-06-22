@@ -25,3 +25,26 @@ export function getUser(): SessionUser | null {
   const raw = localStorage.getItem(USER_KEY);
   return raw ? (JSON.parse(raw) as SessionUser) : null;
 }
+
+/** Reads the JWT `exp` claim without verifying the signature. */
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = token.split(".")[1];
+    const claims = JSON.parse(atob(payload.replaceAll("-", "+").replaceAll("_", "/"))) as { exp?: number };
+    if (!claims.exp) return false;
+    return claims.exp * 1000 <= Date.now();
+  } catch {
+    return true; // malformed token: treat as expired
+  }
+}
+
+/** True only when a non-expired session exists. Clears an expired session as a side effect. */
+export function isAuthenticated(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  if (isTokenExpired(token)) {
+    clearSession();
+    return false;
+  }
+  return true;
+}

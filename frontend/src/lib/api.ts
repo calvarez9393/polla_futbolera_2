@@ -15,8 +15,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const maybeJson = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
-    // An active session whose account was just deactivated: end the session and send to login.
-    if (maybeJson.code === "ACCOUNT_DISABLED") {
+    // Token expired/invalid (401) or account deactivated (403 ACCOUNT_DISABLED): end the
+    // session and send the user to login. On the login page a 401 is just a failed
+    // credential attempt, so we don't redirect there (the error is surfaced instead).
+    if (response.status === 401 || maybeJson.code === "ACCOUNT_DISABLED") {
       clearSession();
       if (window.location.pathname !== "/login") {
         window.location.assign("/login");

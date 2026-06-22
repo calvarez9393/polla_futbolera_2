@@ -1,7 +1,7 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { clearSession, getToken, getUser } from "../lib/auth";
+import { clearSession, getUser, isAuthenticated } from "../lib/auth";
 
-const publicLinks = [
+const baseLinks = [
   { to: "/", label: "Inicio", end: true as const },
   { to: "/standings", label: "Grupos" },
   { to: "/leaderboard", label: "Ranking" }
@@ -9,16 +9,17 @@ const publicLinks = [
 
 export function Navbar() {
   const navigate = useNavigate();
-  const token = getToken();
+  const authed = isAuthenticated();
   const user = getUser();
 
-  const links = token
+  // Every section requires a session now, so an unauthenticated visitor sees no nav links.
+  const links = authed
     ? [
-        ...publicLinks,
+        ...baseLinks,
         { to: "/predictions", label: "Predicciones" as const },
         { to: "/my-points", label: "Mis puntos" as const }
       ]
-    : publicLinks;
+    : [];
 
   return (
     <header className="top-nav">
@@ -37,7 +38,7 @@ export function Navbar() {
             {item.label}
           </NavLink>
         ))}
-        {token && user?.role === "ADMIN" && (
+        {authed && user?.role === "ADMIN" && (
           <>
             <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
               Resultados
@@ -53,7 +54,7 @@ export function Navbar() {
       </nav>
 
       <div className="nav-actions">
-        {token ? (
+        {authed ? (
           <>
             <span className="user-pill">{user?.email}</span>
             <button
@@ -61,7 +62,7 @@ export function Navbar() {
               className="btn btn-ghost"
               onClick={() => {
                 clearSession();
-                navigate("/");
+                navigate("/login");
               }}
             >
               Salir
