@@ -7,8 +7,6 @@ const predictionLinks: { to: string; label: string; end?: boolean }[] = [
 ];
 
 const statsLinks = [
-  { to: "/predictions/qualifiers", label: "Cuadro de 32" },
-  { to: "/predictions/r16", label: "Dieciseisavos" },
   { to: "/predictions/extras", label: "Cuadro y premios" }
 ] as const;
 
@@ -68,7 +66,7 @@ export function PredictionsSubnav() {
             <p>Cuadros, clasificados oficiales simulados y premios especiales del torneo.</p>
           </InfoModal>
         </div>
-        <div className="predictions-subnav-links">
+        <div className="predictions-subnav-links predictions-subnav-links--stats">
           {statsLinks.map((item) => (
             <SubnavLink key={item.to} to={item.to} label={item.label} />
           ))}

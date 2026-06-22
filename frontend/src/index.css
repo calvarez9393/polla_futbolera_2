@@ -3202,7 +3202,9 @@ p {
 
 .predictions-subnav-link--primary {
   border-width: 2px;
-  font-size: 0.9rem;
+  /* Mismo tamaño de texto que el enlace «Resultados» del menú superior (.nav-item). */
+  font-size: 0.95rem;
+  padding: 0.7rem 1.4rem;
 }
 
 .predictions-subnav-link--primary.predictions-subnav-link--active {
