@@ -29,6 +29,40 @@ interface ExtrasWindow {
   open: boolean;
 }
 
+interface QualTeam {
+  id: number;
+  name: string;
+  logoUrl?: string | null;
+  groupName: string;
+}
+
+interface QualRow {
+  rank: number;
+  teamId: number;
+  team?: QualTeam;
+  qualifies: boolean;
+  isThird: boolean;
+}
+
+interface QualGroup {
+  groupId: number;
+  groupName: string;
+  rows: QualRow[];
+}
+
+interface QualThird {
+  teamId: number;
+  groupName: string;
+  team?: QualTeam;
+}
+
+interface QualifiersData {
+  predictedMatches: number;
+  expectedGroupMatches: number;
+  groups: QualGroup[];
+  bestThirds: QualThird[];
+}
+
 function extrasWindowLabel(w: ExtrasWindow): string {
   if (w.openDate && w.closeDate) return `Plazo: del ${w.openDate} al ${w.closeDate}`;
   if (w.openDate) return `Se pueden llenar desde el ${w.openDate}`;
@@ -55,6 +89,7 @@ export function ExtrasPage() {
   const [earnedPoints, setEarnedPoints] = useState<number | null>(null);
   const [earnedBreakdown, setEarnedBreakdown] = useState<Record<string, number> | null>(null);
   const [extrasWindow, setExtrasWindow] = useState<ExtrasWindow | null>(null);
+  const [qualifiers, setQualifiers] = useState<QualifiersData | null>(null);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -81,14 +116,23 @@ export function ExtrasPage() {
     setEarnedBreakdown(res.earnedBreakdown);
   }, []);
 
+  const loadQualifiers = useCallback(async () => {
+    const res = await api<QualifiersData>("/predictions/me/qualifiers");
+    setQualifiers(res);
+  }, []);
+
   useEffect(() => {
     load().catch(() => undefined);
+    loadQualifiers().catch(() => undefined);
     const refresh = () => {
-      if (document.visibilityState === "visible") load().catch(() => undefined);
+      if (document.visibilityState === "visible") {
+        load().catch(() => undefined);
+        loadQualifiers().catch(() => undefined);
+      }
     };
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
-  }, [load]);
+  }, [load, loadQualifiers]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -130,6 +174,65 @@ export function ExtrasPage() {
         <div className="panel-card" style={{ marginBottom: "1rem" }}>
           <PointsChips breakdown={earnedBreakdown} totalPoints={earnedPoints} />
         </div>
+      )}
+
+      {qualifiers && (
+        <section className="panel-card" style={{ marginBottom: "1rem" }}>
+          <SectionTitle
+            title="Tu fase de grupos — quiénes clasifican"
+            help={
+              <p>
+                Equipos que, según tus marcadores de grupos, pasan a la siguiente fase: 1° y 2° de cada grupo y los 8
+                mejores terceros. Ajusta tus marcadores en <Link to="/predictions">Partidos</Link>.
+              </p>
+            }
+          />
+          <p className="admin-block-hint" style={{ marginTop: 0 }}>
+            Según tus marcadores de grupos ({qualifiers.predictedMatches}/{qualifiers.expectedGroupMatches} partidos).{" "}
+            <Link to="/predictions/qualifiers">Ver cuadro completo de 32</Link>
+          </p>
+
+          <div className="extras-qualifiers-grid">
+            {qualifiers.groups.map((g) => {
+              const advancing = g.rows.filter((r) => r.qualifies);
+              return (
+                <div key={g.groupId} className="extras-qualifier-group">
+                  <h3>Grupo {g.groupName}</h3>
+                  {advancing.length === 0 ? (
+                    <p className="admin-block-hint" style={{ margin: 0 }}>Sin marcadores aún</p>
+                  ) : (
+                    <ul className="extras-qualifier-teams">
+                      {advancing.map((r) => (
+                        <li key={r.teamId}>
+                          <span className="extras-qualifier-rank">{r.rank}°</span>
+                          {r.team && <TeamFlag name={r.team.name} logoUrl={r.team.logoUrl} size="sm" />}
+                          <span>{r.team?.name ?? `Equipo ${r.teamId}`}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {qualifiers.bestThirds.length > 0 && (
+            <>
+              <h3 style={{ fontSize: "0.95rem", margin: "1rem 0 0.5rem" }}>8 mejores terceros</h3>
+              <ol className="best-thirds-list">
+                {qualifiers.bestThirds.map((t, i) => (
+                  <li key={t.teamId}>
+                    <span className="best-thirds-rank">{i + 1}.</span>
+                    {t.team && <TeamFlag name={t.team.name} logoUrl={t.team.logoUrl} size="sm" />}
+                    <span>
+                      {t.team?.name ?? `Equipo ${t.teamId}`} — Grupo {t.groupName}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </section>
       )}
 
       <section className="panel-card" style={{ marginBottom: "1rem" }}>

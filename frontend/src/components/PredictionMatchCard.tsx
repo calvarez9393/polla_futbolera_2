@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { PointsChips } from "./PointsChips";
 import { TeamFlag } from "./TeamFlag";
 import { api } from "../lib/api";
@@ -70,7 +70,22 @@ interface PredictionMatchCardProps {
   readOnly?: boolean;
 }
 
-export function PredictionMatchCard({ match, onSaved, readOnly = false }: PredictionMatchCardProps) {
+/** Borrador listo para enviar al endpoint de pronósticos. */
+export interface PredictionDraft {
+  matchId: number;
+  predictedHomeScore: number;
+  predictedAwayScore: number;
+  predictedAdvancingTeamId?: number;
+}
+
+/** Handle imperativo para que el padre (guardado por ronda) recoja el borrador actual. */
+export interface PredictionMatchCardHandle {
+  /** Borrador válido si la tarjeta es editable y completa; null si está cerrada o incompleta. */
+  getDraft: () => PredictionDraft | null;
+}
+
+export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, PredictionMatchCardProps>(
+  function PredictionMatchCard({ match, onSaved, readOnly = false }, ref) {
   const [predHome, setPredHome] = useState(String(match.prediction?.predictedHomeScore ?? 0));
   const [predAway, setPredAway] = useState(String(match.prediction?.predictedAwayScore ?? 0));
   const [advancingId, setAdvancingId] = useState<number | "">(
@@ -118,6 +133,36 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
     advancingId !== ""
       ? Number(advancingId)
       : match.prediction?.predictedAdvancingTeamId ?? match.advancingTeamId ?? null;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getDraft() {
+        if (readOnly || !canPredict) return null;
+        if (needsAdvancingOnDraw && isDrawPrediction && !effectiveAdvancingId) return null;
+        const draft: PredictionDraft = {
+          matchId: Number(match.id),
+          predictedHomeScore: predHomeNum,
+          predictedAwayScore: predAwayNum
+        };
+        if (showAdvancingUi && effectiveAdvancingId) {
+          draft.predictedAdvancingTeamId = effectiveAdvancingId;
+        }
+        return draft;
+      }
+    }),
+    [
+      readOnly,
+      canPredict,
+      needsAdvancingOnDraw,
+      isDrawPrediction,
+      effectiveAdvancingId,
+      match.id,
+      predHomeNum,
+      predAwayNum,
+      showAdvancingUi
+    ]
+  );
 
   const displayAdvancingName =
     effectiveAdvancingId === match.homeTeamId
@@ -421,4 +466,5 @@ export function PredictionMatchCard({ match, onSaved, readOnly = false }: Predic
       )}
     </article>
   );
-}
+  }
+);

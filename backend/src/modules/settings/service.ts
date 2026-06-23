@@ -87,7 +87,8 @@ export function isMatchAcceptingPredictions(
   match: { status: string; stage?: string | null; round_key?: string | null },
   lockAt: Date,
   now = new Date(),
-  knockoutConfig: KnockoutPredictionConfig | null = null
+  knockoutConfig: KnockoutPredictionConfig | null = null,
+  groupStageComplete = false
 ): boolean {
   if (match.status === "FINISHED" || match.status === "LIVE") {
     return false;
@@ -97,7 +98,7 @@ export function isMatchAcceptingPredictions(
   }
   if (
     match.stage === "KNOCKOUT" &&
-    !isKnockoutRoundOpenForPredictions(match.round_key, now, knockoutConfig)
+    !isKnockoutRoundOpenForPredictions(match.round_key, now, knockoutConfig, groupStageComplete)
   ) {
     return false;
   }
@@ -108,7 +109,8 @@ export async function buildPredictionAvailability(
   match: { status: string; stage?: string | null; round_key?: string | null },
   lockAt: Date,
   now = new Date(),
-  knockoutConfig?: KnockoutPredictionConfig | null
+  knockoutConfig?: KnockoutPredictionConfig | null,
+  groupStageComplete = false
 ) {
   const config =
     match.stage === "KNOCKOUT"
@@ -116,10 +118,10 @@ export async function buildPredictionAvailability(
       : null;
   const predictionWindow =
     match.stage === "KNOCKOUT"
-      ? buildKnockoutPredictionWindowApi(match.round_key, now, config)
+      ? buildKnockoutPredictionWindowApi(match.round_key, now, config, groupStageComplete)
       : null;
   return {
-    predictionsOpen: isMatchAcceptingPredictions(match, lockAt, now, config),
+    predictionsOpen: isMatchAcceptingPredictions(match, lockAt, now, config, groupStageComplete),
     predictionWindow
   };
 }

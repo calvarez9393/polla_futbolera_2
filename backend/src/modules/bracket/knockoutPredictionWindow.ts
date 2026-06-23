@@ -96,12 +96,15 @@ export function resolveEffectiveKnockoutWindow(
 export function isKnockoutRoundOpenForPredictions(
   roundKey: string | null | undefined,
   now = new Date(),
-  config: KnockoutPredictionConfig | null = null
+  config: KnockoutPredictionConfig | null = null,
+  groupStageComplete = false
 ): boolean {
   const window = resolveEffectiveKnockoutWindow(roundKey, config);
-  if (!window) return false;
+  if (!window) return groupStageComplete;
   const today = formatVenueCalendarDate(now);
-  return today >= window.openDate && today <= window.closeDate;
+  // La fase de grupos terminada relaja la apertura (abre de inmediato); el cierre manda igual.
+  const openedByDate = today >= window.openDate;
+  return (groupStageComplete || openedByDate) && today <= window.closeDate;
 }
 
 export function formatCalendarDateYmd(ymd: string): string {
@@ -122,7 +125,8 @@ export function knockoutPredictionClosedReason(
   match: { stage?: string | null; round_key?: string | null; status: string },
   lockAt: Date,
   now = new Date(),
-  config: KnockoutPredictionConfig | null = null
+  config: KnockoutPredictionConfig | null = null,
+  groupStageComplete = false
 ): string | null {
   if (match.status === "FINISHED") {
     return "El partido ya finalizó; no se pueden crear ni modificar predicciones";
@@ -130,14 +134,18 @@ export function knockoutPredictionClosedReason(
   if (match.status === "LIVE") {
     return "El partido está en juego; predicciones cerradas";
   }
-  if (match.stage === "KNOCKOUT" && !isKnockoutRoundOpenForPredictions(match.round_key, now, config)) {
+  if (
+    match.stage === "KNOCKOUT" &&
+    !isKnockoutRoundOpenForPredictions(match.round_key, now, config, groupStageComplete)
+  ) {
     const window = resolveEffectiveKnockoutWindow(match.round_key, config);
     const today = formatVenueCalendarDate(now);
     const adminWindow = hasAdminKnockoutWindow(config);
     const sourceLabel = adminWindow ? "configuración admin" : "calendario sede";
 
     if (window) {
-      if (today < window.openDate) {
+      // Si los grupos ya terminaron, la apertura está relajada: el único motivo posible es deadline pasado.
+      if (today < window.openDate && !groupStageComplete) {
         if (adminWindow) {
           return `Las predicciones de eliminatorias se habilitan el ${formatCalendarDateYmd(window.openDate)} (${sourceLabel})`;
         }
@@ -167,12 +175,14 @@ export interface PredictionWindowApi {
   globalOpenDate?: string | null;
   globalCloseDate?: string | null;
   source?: "admin" | "fixture";
+  groupStageComplete?: boolean;
 }
 
 export function buildKnockoutPredictionWindowApi(
   roundKey: string | null | undefined,
   now = new Date(),
-  config: KnockoutPredictionConfig | null = null
+  config: KnockoutPredictionConfig | null = null,
+  groupStageComplete = false
 ): PredictionWindowApi | null {
   const effective = resolveEffectiveKnockoutWindow(roundKey, config);
   if (!effective) return null;
@@ -180,9 +190,10 @@ export function buildKnockoutPredictionWindowApi(
   return {
     openDate: effective.openDate,
     closeDate: effective.closeDate,
-    isOpen: isKnockoutRoundOpenForPredictions(roundKey, now, config),
+    isOpen: isKnockoutRoundOpenForPredictions(roundKey, now, config, groupStageComplete),
     globalOpenDate: config?.openDate ?? null,
     globalCloseDate: config?.closeDate ?? null,
-    source: adminWindow ? "admin" : "fixture"
+    source: adminWindow ? "admin" : "fixture",
+    groupStageComplete
   };
 }

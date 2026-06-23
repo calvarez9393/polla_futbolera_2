@@ -9,6 +9,7 @@ import { adminCalendarRouter } from "./calendar.js";
 import { adminCompetitionRouter } from "./competition.js";
 import { adminScoringRouter } from "./scoring.js";
 import { adminMatchScoringRouter } from "./matchScoring.js";
+import { adminKnockoutCompletionRouter } from "./knockoutCompletion.js";
 import { pickScoringRulesRow, scoringRulesToDbParams, SCORING_RULE_UPDATE_SQL } from "../scoring/ruleFields.js";
 import { DEFAULT_OFFICIAL_RULES } from "../scoring/rulesConfig.js";
 
@@ -45,6 +46,7 @@ adminRouter.use(requireAuth, requireAdmin);
 adminRouter.use(adminMatchesRouter);
 adminRouter.use(adminScoringRouter);
 adminRouter.use(adminMatchScoringRouter);
+adminRouter.use(adminKnockoutCompletionRouter);
 adminRouter.use("/users", adminUsersRouter);
 adminRouter.use(adminCalendarRouter);
 adminRouter.use("/competition", adminCompetitionRouter);

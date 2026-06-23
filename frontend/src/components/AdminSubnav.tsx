@@ -4,6 +4,7 @@ const links = [
   { to: "/admin/calendar", label: "Calendario y resultados" },
   { to: "/admin/official", label: "Oficiales y bonos" },
   { to: "/admin/users", label: "Usuarios" },
+  { to: "/admin/knockout", label: "Eliminatorias" },
   { to: "/admin", label: "Configuración", end: true }
 ];
 

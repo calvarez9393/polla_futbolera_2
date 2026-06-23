@@ -75,4 +75,45 @@ describe("knockoutPredictionWindow", () => {
     const noonUtc = new Date("2026-06-28T16:00:00Z");
     expect(formatVenueCalendarDate(noonUtc)).toBe("2026-06-28");
   });
+
+  it("abre eliminatorias al terminar grupos, antes de la fecha de apertura", () => {
+    const beforeR16 = new Date("2026-06-15T12:00:00-04:00");
+    // Sin grupos completos: cerrado por estar antes de la ventana.
+    expect(isKnockoutRoundOpenForPredictions("R16", beforeR16, null, false)).toBe(false);
+    // Con grupos completos: abre de inmediato aunque falte para la fecha de apertura.
+    expect(isKnockoutRoundOpenForPredictions("R16", beforeR16, null, true)).toBe(true);
+    expect(
+      knockoutPredictionClosedReason(
+        { stage: "KNOCKOUT", round_key: "R16", status: "SCHEDULED" },
+        new Date("2026-07-01T00:00:00Z"),
+        beforeR16,
+        null,
+        true
+      )
+    ).toBeNull();
+  });
+
+  it("respeta el cierre admin aunque los grupos hayan terminado", () => {
+    const afterClose = new Date("2026-06-23T12:00:00-04:00");
+    const config = { openDate: "2026-06-22", closeDate: "2026-06-22" };
+    expect(isKnockoutRoundOpenForPredictions("R16", afterClose, config, true)).toBe(false);
+    expect(
+      knockoutPredictionClosedReason(
+        { stage: "KNOCKOUT", round_key: "R16", status: "SCHEDULED" },
+        new Date("2026-07-01T00:00:00Z"),
+        afterClose,
+        config,
+        true
+      )
+    ).toMatch(/cerraron el/);
+  });
+
+  it("abre con cierre admin futuro cuando los grupos terminaron", () => {
+    const beforeOpen = new Date("2026-06-23T12:00:00-04:00");
+    const config = { openDate: "2026-06-25", closeDate: "2026-07-01" };
+    // Antes de la apertura admin y sin grupos completos: cerrado.
+    expect(isKnockoutRoundOpenForPredictions("R16", beforeOpen, config, false)).toBe(false);
+    // Grupos completos + dentro del cierre admin: abierto pese a no llegar la apertura.
+    expect(isKnockoutRoundOpenForPredictions("R16", beforeOpen, config, true)).toBe(true);
+  });
 });

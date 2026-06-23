@@ -41,6 +41,7 @@ import {
   syncUserQualifierPredictions
 } from "../qualifiers/fromPredictions.js";
 import { fetchUserScores } from "../leaderboard/userScores.js";
+import { isGroupStageComplete } from "../scoring/qualifiers.js";
 
 const calendarQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -90,14 +91,20 @@ predictionsRouter.get("/me/calendar", async (req, res, next) => {
     await applyResolvedTeamsToMatchRows(userId, result.rows);
     await enrichKnockoutAdvancingOnRows(userId, result.rows);
 
-    const knockoutConfig = result.rows.some((row) => row.stage === "KNOCKOUT")
-      ? await loadKnockoutPredictionConfig()
-      : null;
+    const hasKnockout = result.rows.some((row) => row.stage === "KNOCKOUT");
+    const knockoutConfig = hasKnockout ? await loadKnockoutPredictionConfig() : null;
+    const groupStageComplete = hasKnockout ? await isGroupStageComplete() : false;
 
     const matches = await Promise.all(
       result.rows.map(async (row) => {
         const lockAt = await resolvePredictionLockAt(row);
-        const availability = await buildPredictionAvailability(row, lockAt, new Date(), knockoutConfig);
+        const availability = await buildPredictionAvailability(
+          row,
+          lockAt,
+          new Date(),
+          knockoutConfig,
+          groupStageComplete
+        );
         return mapCalendarMatchRow(row, availability, lockAt);
       })
     );
@@ -108,86 +115,159 @@ predictionsRouter.get("/me/calendar", async (req, res, next) => {
   }
 });
 
+type PredictionInput = z.infer<typeof predictionSchema>;
+
+type SaveResult =
+  | { ok: true; row: Record<string, unknown>; stage: string | null }
+  | { ok: false; status: number; message: string; lockAt?: string };
+
+/**
+ * Guarda (upsert) un pronóstico de un usuario validando ventana/cierre. No ejecuta la
+ * sincronización de clasificados/bonos; el caller decide hacerla una sola vez (clave para batch).
+ * `precomputed` permite reusar config KO y estado de grupos sin recalcular por partido.
+ */
+async function saveOnePrediction(
+  userId: number,
+  input: PredictionInput,
+  precomputed?: { knockoutConfig?: Awaited<ReturnType<typeof loadKnockoutPredictionConfig>>; groupStageComplete?: boolean }
+): Promise<SaveResult> {
+  const matchResult = await pool.query("SELECT * FROM matches WHERE id = $1", [input.matchId]);
+  const match = matchResult.rows[0];
+  if (!match) {
+    return { ok: false, status: 404, message: "Partido no encontrado" };
+  }
+
+  const isKnockout = match.stage === "KNOCKOUT";
+  const lockAt = await resolvePredictionLockAt(match);
+  const knockoutConfig = isKnockout
+    ? (precomputed?.knockoutConfig ?? (await loadKnockoutPredictionConfig()))
+    : null;
+  const groupStageComplete = isKnockout
+    ? (precomputed?.groupStageComplete ?? (await isGroupStageComplete()))
+    : false;
+
+  const closedReason = knockoutPredictionClosedReason(
+    match,
+    lockAt,
+    new Date(),
+    knockoutConfig,
+    groupStageComplete
+  );
+  if (closedReason) {
+    return { ok: false, status: 400, message: closedReason, lockAt: lockAt.toISOString() };
+  }
+
+  const advancingTeamId = await resolveKnockoutAdvancingForSave(
+    match,
+    userId,
+    input.predictedHomeScore,
+    input.predictedAwayScore,
+    input.predictedAdvancingTeamId ?? null
+  );
+
+  if (requiresKnockoutAdvancingTeam(match) && advancingTeamId == null) {
+    return {
+      ok: false,
+      status: 400,
+      message:
+        input.predictedHomeScore === input.predictedAwayScore
+          ? "En empate debes indicar quién gana en penales y pasa a la siguiente ronda"
+          : "No se pudo determinar el equipo que avanza"
+    };
+  }
+
+  let bracketHomeId: number | null = null;
+  let bracketAwayId: number | null = null;
+  if (isKnockout) {
+    const slot = await resolveUserSlotTeamsForMatch(userId, match);
+    if (slot) {
+      bracketHomeId = slot.homeTeamId;
+      bracketAwayId = slot.awayTeamId;
+    }
+  }
+
+  const result = await pool.query(
+    `INSERT INTO predictions (
+      user_id, match_id, predicted_home_score, predicted_away_score,
+      predicted_advancing_team_id, bracket_home_team_id, bracket_away_team_id
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (user_id, match_id)
+    DO UPDATE SET
+      predicted_home_score = EXCLUDED.predicted_home_score,
+      predicted_away_score = EXCLUDED.predicted_away_score,
+      predicted_advancing_team_id = EXCLUDED.predicted_advancing_team_id,
+      bracket_home_team_id = EXCLUDED.bracket_home_team_id,
+      bracket_away_team_id = EXCLUDED.bracket_away_team_id,
+      updated_at = NOW()
+    RETURNING *`,
+    [
+      userId,
+      input.matchId,
+      input.predictedHomeScore,
+      input.predictedAwayScore,
+      advancingTeamId,
+      bracketHomeId,
+      bracketAwayId
+    ]
+  );
+
+  return { ok: true, row: result.rows[0], stage: match.stage ?? null };
+}
+
 predictionsRouter.post("/", async (req, res, next) => {
   try {
     const input = predictionSchema.parse(req.body);
-    const matchResult = await pool.query("SELECT * FROM matches WHERE id = $1", [input.matchId]);
-    const match = matchResult.rows[0];
-    if (!match) {
-      res.status(404).json({ message: "Partido no encontrado" });
+    const result = await saveOnePrediction(req.user!.id, input);
+    if (!result.ok) {
+      res.status(result.status).json({ message: result.message, lockAt: result.lockAt });
       return;
     }
 
-    const lockAt = await resolvePredictionLockAt(match);
-    const knockoutConfig =
-      match.stage === "KNOCKOUT" ? await loadKnockoutPredictionConfig() : null;
-    const closedReason = knockoutPredictionClosedReason(match, lockAt, new Date(), knockoutConfig);
-    if (closedReason) {
-      res.status(400).json({ message: closedReason, lockAt: lockAt.toISOString() });
-      return;
-    }
-
-    const advancingTeamId = await resolveKnockoutAdvancingForSave(
-      match,
-      req.user!.id,
-      input.predictedHomeScore,
-      input.predictedAwayScore,
-      input.predictedAdvancingTeamId ?? null
-    );
-
-    if (requiresKnockoutAdvancingTeam(match) && advancingTeamId == null) {
-      res.status(400).json({
-        message:
-          input.predictedHomeScore === input.predictedAwayScore
-            ? "En empate debes indicar quién gana en penales y pasa a la siguiente ronda"
-            : "No se pudo determinar el equipo que avanza"
-      });
-      return;
-    }
-
-    let bracketHomeId: number | null = null;
-    let bracketAwayId: number | null = null;
-    if (match.stage === "KNOCKOUT") {
-      const slot = await resolveUserSlotTeamsForMatch(req.user!.id, match);
-      if (slot) {
-        bracketHomeId = slot.homeTeamId;
-        bracketAwayId = slot.awayTeamId;
-      }
-    }
-
-    const result = await pool.query(
-      `INSERT INTO predictions (
-        user_id, match_id, predicted_home_score, predicted_away_score,
-        predicted_advancing_team_id, bracket_home_team_id, bracket_away_team_id
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (user_id, match_id)
-      DO UPDATE SET
-        predicted_home_score = EXCLUDED.predicted_home_score,
-        predicted_away_score = EXCLUDED.predicted_away_score,
-        predicted_advancing_team_id = EXCLUDED.predicted_advancing_team_id,
-        bracket_home_team_id = EXCLUDED.bracket_home_team_id,
-        bracket_away_team_id = EXCLUDED.bracket_away_team_id,
-        updated_at = NOW()
-      RETURNING *`,
-      [
-        req.user!.id,
-        input.matchId,
-        input.predictedHomeScore,
-        input.predictedAwayScore,
-        advancingTeamId,
-        bracketHomeId,
-        bracketAwayId
-      ]
-    );
-
-    if (match.stage === "GROUP") {
+    if (result.stage === "GROUP") {
       await syncUserQualifierPredictions(req.user!.id);
-    } else if (match.stage === "KNOCKOUT") {
+    } else if (result.stage === "KNOCKOUT") {
       await syncUserBonusPicksFromBracket(req.user!.id);
     }
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(result.row);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const batchPredictionSchema = z.object({
+  predictions: z.array(predictionSchema).min(1).max(64)
+});
+
+predictionsRouter.post("/batch", async (req, res, next) => {
+  try {
+    const { predictions } = batchPredictionSchema.parse(req.body);
+    const userId = req.user!.id;
+    const knockoutConfig = await loadKnockoutPredictionConfig();
+    const groupStageComplete = await isGroupStageComplete();
+
+    let saved = 0;
+    let savedGroup = false;
+    let savedKnockout = false;
+    const errors: Array<{ matchId: number; message: string }> = [];
+
+    for (const input of predictions) {
+      const result = await saveOnePrediction(userId, input, { knockoutConfig, groupStageComplete });
+      if (result.ok) {
+        saved += 1;
+        if (result.stage === "GROUP") savedGroup = true;
+        else if (result.stage === "KNOCKOUT") savedKnockout = true;
+      } else {
+        errors.push({ matchId: input.matchId, message: result.message });
+      }
+    }
+
+    // Sincronización una sola vez al final, no por partido.
+    if (savedGroup) await syncUserQualifierPredictions(userId);
+    if (savedKnockout) await syncUserBonusPicksFromBracket(userId);
+
+    res.status(errors.length > 0 && saved === 0 ? 400 : 200).json({ saved, errors });
   } catch (error) {
     next(error);
   }
@@ -241,6 +321,7 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
     await enrichKnockoutAdvancingOnRows(userId, result.rows);
 
     const knockoutConfig = await loadKnockoutPredictionConfig();
+    const groupStageComplete = await isGroupStageComplete();
     const now = new Date();
 
     const roundOrder = ["R16", "R8", "R4", "SF", "TP3", "F"] as const;
@@ -258,7 +339,13 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
       const key = (row.round_key as string) ?? "R16";
       if (!byRound.has(key)) byRound.set(key, []);
       const lockAt = await resolvePredictionLockAt(row);
-      const availability = await buildPredictionAvailability(row, lockAt, now, knockoutConfig);
+      const availability = await buildPredictionAvailability(
+        row,
+        lockAt,
+        now,
+        knockoutConfig,
+        groupStageComplete
+      );
       byRound.get(key)!.push(mapCalendarMatchRow(row, availability, lockAt));
     }
 
@@ -268,13 +355,14 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
         .map((k) => ({
           roundKey: k,
           title: roundLabels[k] ?? k,
-          predictionWindow: buildKnockoutPredictionWindowApi(k, now, knockoutConfig),
+          predictionWindow: buildKnockoutPredictionWindowApi(k, now, knockoutConfig, groupStageComplete),
           matches: byRound.get(k) ?? []
         })),
       knockoutGlobalWindow: {
         openDate: knockoutConfig.openDate,
         closeDate: knockoutConfig.closeDate
-      }
+      },
+      groupStageComplete
     });
   } catch (error) {
     next(error);

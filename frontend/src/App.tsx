@@ -15,6 +15,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { AdminCalendarPage } from "./pages/AdminCalendarPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminOfficialPage } from "./pages/AdminOfficialPage";
+import { AdminKnockoutCompletionPage } from "./pages/AdminKnockoutCompletionPage";
 import { MyPointsPage } from "./pages/MyPointsPage";
 
 function App() {
@@ -63,6 +64,14 @@ function App() {
             element={
               <AdminRoute>
                 <AdminOfficialPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/knockout"
+            element={
+              <AdminRoute>
+                <AdminKnockoutCompletionPage />
               </AdminRoute>
             }
           />
