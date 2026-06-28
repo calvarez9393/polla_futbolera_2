@@ -162,6 +162,10 @@ export function knockoutPredictionClosedReason(
     }
     return "Las predicciones de eliminatorias no están abiertas en esta fecha";
   }
+  // En eliminatorias no hay cierre por saque del partido: dentro de la ventana queda abierto.
+  if (match.stage === "KNOCKOUT") {
+    return null;
+  }
   if (now.getTime() >= lockAt.getTime()) {
     return `Predicciones cerradas desde ${lockAt.toLocaleString("es-ES")}`;
   }

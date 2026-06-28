@@ -3,7 +3,7 @@ import { PointsChips } from "./PointsChips";
 import { TeamFlag } from "./TeamFlag";
 import { api } from "../lib/api";
 import { matchCardStatusClass, statusBadgeClass, statusLabel } from "../lib/matchStatus";
-import { formatKickoffLocal, formatPredictionLock, formatPredictionWindowRange } from "../lib/matchTime";
+import { formatCalendarDateYmd, formatKickoffLocal, formatPredictionLock, formatPredictionWindowRange } from "../lib/matchTime";
 import { ROUND_LABELS } from "../lib/scoringLabels";
 import {
   advancingTeamIdFromScores,
@@ -349,7 +349,10 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
         <span>{formatKickoffLocal({ kickoff_time_local: match.kickoffTimeLocal, starts_at: match.startsAt })} (hora sede)</span>
         {canPredict ? (
           <span className="badge badge-scheduled">
-            Abierto hasta {formatPredictionLock(match.predictionLockAt)}
+            Abierto hasta{" "}
+            {match.stage === "KNOCKOUT" && match.predictionWindow
+              ? formatCalendarDateYmd(match.predictionWindow.closeDate)
+              : formatPredictionLock(match.predictionLockAt)}
           </span>
         ) : windowClosed && match.predictionWindow ? (
           <span className="badge badge-live">

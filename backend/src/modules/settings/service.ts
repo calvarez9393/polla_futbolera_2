@@ -93,16 +93,12 @@ export function isMatchAcceptingPredictions(
   if (match.status === "FINISHED" || match.status === "LIVE") {
     return false;
   }
-  if (!isPredictionOpen(lockAt)) {
-    return false;
+  // En eliminatorias el único cierre es la ventana de la ronda (fechas de apertura/cierre);
+  // no aplica el bloqueo por saque del partido (p. ej. 24 h antes).
+  if (match.stage === "KNOCKOUT") {
+    return isKnockoutRoundOpenForPredictions(match.round_key, now, knockoutConfig, groupStageComplete);
   }
-  if (
-    match.stage === "KNOCKOUT" &&
-    !isKnockoutRoundOpenForPredictions(match.round_key, now, knockoutConfig, groupStageComplete)
-  ) {
-    return false;
-  }
-  return true;
+  return isPredictionOpen(lockAt);
 }
 
 export async function buildPredictionAvailability(
