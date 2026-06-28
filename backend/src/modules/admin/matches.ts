@@ -193,7 +193,7 @@ adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
   try {
     const input = scheduleSchema.parse(req.body);
     const existing = await pool.query(
-      "SELECT id, starts_at, calendar_date, kickoff_time_local FROM matches WHERE id = $1",
+      "SELECT id, starts_at, calendar_date, kickoff_time_local, prediction_lock_at FROM matches WHERE id = $1",
       [req.params.id]
     );
     const match = existing.rows[0];
@@ -218,12 +218,27 @@ adminMatchesRouter.patch("/matches/:id/schedule", async (req, res, next) => {
     if (venueOffsetMs > DAY_MS / 2) venueOffsetMs -= DAY_MS; // (-12 h, +12 h]
     const startsAt = new Date(newNaive + venueOffsetMs);
 
+    // El cierre por partido (prediction_lock_at) se desplaza el mismo delta que el saque para
+    // conservar su anticipación; si no, al mover la fecha quedaría anclado al saque viejo (en el
+    // pasado) y la predicción seguiría cerrada pese a la nueva fecha.
+    const lockShiftMs = startsAt.getTime() - new Date(match.starts_at).getTime();
+    const newLockAt = match.prediction_lock_at
+      ? new Date(new Date(match.prediction_lock_at).getTime() + lockShiftMs)
+      : null;
+
     const result = await pool.query(
       `UPDATE matches SET
-        starts_at = $1, calendar_date = $2::date, kickoff_time_local = $3, updated_at = NOW()
-      WHERE id = $4
+        starts_at = $1, calendar_date = $2::date, kickoff_time_local = $3,
+        prediction_lock_at = $4, updated_at = NOW()
+      WHERE id = $5
       RETURNING *`,
-      [startsAt.toISOString(), input.calendarDate, input.kickoffTimeLocal, req.params.id]
+      [
+        startsAt.toISOString(),
+        input.calendarDate,
+        input.kickoffTimeLocal,
+        newLockAt?.toISOString() ?? null,
+        req.params.id
+      ]
     );
 
     res.json({
