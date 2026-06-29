@@ -183,7 +183,7 @@ export function ExtrasPage() {
             help={
               <p>
                 Equipos que, según tus marcadores de grupos, pasan a la siguiente fase: 1° y 2° de cada grupo y los 8
-                mejores terceros. Ajusta tus marcadores en <Link to="/predictions">Partidos</Link>.
+                mejores terceros. Ajusta tus marcadores en <Link to="/predictions?stage=KNOCKOUT">Partidos</Link>.
               </p>
             }
           />

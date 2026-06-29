@@ -354,7 +354,6 @@ export function BracketPage() {
                             ref={setCardRef(Number(match.id))}
                             match={match}
                             onSaved={onMatchSaved}
-                            hideKickoffTime
                           />
                         ))}
                       </div>

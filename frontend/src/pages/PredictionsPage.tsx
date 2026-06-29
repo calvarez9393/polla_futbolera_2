@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DateNavigator } from "../components/DateNavigator";
 import { PageTitle } from "../components/InfoModal";
 import { PredictionsSubnav } from "../components/PredictionsSubnav";
@@ -19,6 +19,7 @@ interface DateRow {
 
 interface PublicMatchRow {
   id: number | string;
+  stage?: string;
   status: string;
   round_key?: string | null;
   starts_at: string;
@@ -39,6 +40,7 @@ interface PublicMatchRow {
 function mapPublicMatch(row: PublicMatchRow): CalendarPredictionMatch {
   return {
     id: row.id,
+    stage: row.stage,
     status: row.status,
     roundKey: row.round_key,
     startsAt: row.starts_at,
@@ -60,15 +62,54 @@ function mapPublicMatch(row: PublicMatchRow): CalendarPredictionMatch {
   };
 }
 
+type StageFilter = "" | "GROUP" | "KNOCKOUT";
+
+function stageFromParam(value: string | null): StageFilter {
+  if (value === "GROUP") return "GROUP";
+  if (value === "ALL") return "";
+  return "KNOCKOUT";
+}
+
+function stageToParam(value: StageFilter): string {
+  if (value === "GROUP") return "GROUP";
+  if (value === "") return "ALL";
+  return "KNOCKOUT";
+}
+
 export function PredictionsPage() {
   const token = getToken();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState("");
   const [dates, setDates] = useState<DateRow[]>([]);
-  const [stageFilter, setStageFilter] = useState<"" | "GROUP" | "KNOCKOUT">("KNOCKOUT");
+  const stageFilter = stageFromParam(searchParams.get("stage"));
   const [matches, setMatches] = useState<CalendarPredictionMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [datesLoading, setDatesLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!searchParams.get("stage")) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("stage", "KNOCKOUT");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, setSearchParams]);
+
+  function setStageFilter(next: StageFilter) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("stage", stageToParam(next));
+        return params;
+      },
+      { replace: true }
+    );
+  }
 
   function applyLoadedDates(rows: DateRow[]) {
     setDates(rows);

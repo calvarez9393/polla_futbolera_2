@@ -7,6 +7,7 @@ import { formatCalendarDateYmd, formatKickoffLocal, formatPredictionLock, format
 import { ROUND_LABELS } from "../lib/scoringLabels";
 import {
   advancingTeamIdFromScores,
+  isKnockoutMatch,
   nextRoundLabel,
   requiresAdvancingOnDraw,
   showsKnockoutAdvancingUi
@@ -68,7 +69,6 @@ interface PredictionMatchCardProps {
   match: CalendarPredictionMatch;
   onSaved?: () => void;
   readOnly?: boolean;
-  hideKickoffTime?: boolean;
 }
 
 /** Borrador listo para enviar al endpoint de pronósticos. */
@@ -86,7 +86,7 @@ export interface PredictionMatchCardHandle {
 }
 
 export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, PredictionMatchCardProps>(
-  function PredictionMatchCard({ match, onSaved, readOnly = false, hideKickoffTime = false }, ref) {
+  function PredictionMatchCard({ match, onSaved, readOnly = false }, ref) {
   const [predHome, setPredHome] = useState(String(match.prediction?.predictedHomeScore ?? 0));
   const [predAway, setPredAway] = useState(String(match.prediction?.predictedAwayScore ?? 0));
   const [advancingId, setAdvancingId] = useState<number | "">(
@@ -108,6 +108,7 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
   const windowClosed =
     match.predictionWindow != null && !match.predictionWindow.isOpen;
   const showPoints = match.status === "FINISHED";
+  const showKickoffTime = !isKnockoutMatch(match.stage, match.roundKey);
 
   useEffect(() => {
     setPredHome(String(match.prediction?.predictedHomeScore ?? 0));
@@ -347,7 +348,7 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
         {match.groupName && <span className="badge badge-scheduled">{match.groupName}</span>}
         {match.roundLabel && <span>{match.roundLabel}</span>}
         {match.matchday != null && <span>Fecha {match.matchday}</span>}
-        {!hideKickoffTime && (
+        {showKickoffTime && (
           <span>
             {formatKickoffLocal({ kickoff_time_local: match.kickoffTimeLocal, starts_at: match.startsAt })}{" "}
             (hora sede)

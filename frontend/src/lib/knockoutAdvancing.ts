@@ -4,6 +4,10 @@ export function isKnockoutRound(roundKey?: string | null): boolean {
   return roundKey != null && KNOCKOUT_ROUND_KEYS.has(roundKey);
 }
 
+export function isKnockoutMatch(stage?: string | null, roundKey?: string | null): boolean {
+  return stage === "KNOCKOUT" || isKnockoutRound(roundKey);
+}
+
 export function isGroupMatch(stage?: string | null, roundKey?: string | null): boolean {
   return stage === "GROUP" || roundKey === "GROUP";
 }

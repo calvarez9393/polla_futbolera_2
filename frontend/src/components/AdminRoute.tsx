@@ -4,6 +4,6 @@ import { getUser } from "../lib/auth";
 
 export function AdminRoute({ children }: PropsWithChildren) {
   const user = getUser();
-  if (!user || user.role !== "ADMIN") return <Navigate to="/predictions" replace />;
+  if (!user || user.role !== "ADMIN") return <Navigate to="/predictions?stage=KNOCKOUT" replace />;
   return children;
 }

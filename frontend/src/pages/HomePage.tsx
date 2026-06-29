@@ -53,7 +53,7 @@ export function HomePage() {
             puntuación automática y panel táctico para vivir el mundial con tu equipo.
           </p>
           {token ? (
-            <Link to="/predictions" className="btn btn-cta">
+            <Link to="/predictions?stage=KNOCKOUT" className="btn btn-cta">
               Hacer predicción
             </Link>
           ) : (

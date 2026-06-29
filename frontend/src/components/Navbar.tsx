@@ -21,7 +21,7 @@ export function Navbar() {
   const links = authed
     ? [
         ...baseLinks,
-        { to: "/predictions", label: "Predicciones" as const },
+        { to: "/predictions?stage=KNOCKOUT", label: "Predicciones" as const },
         { to: "/my-points", label: "Mis puntos" as const }
       ]
     : [];
@@ -40,7 +40,7 @@ export function Navbar() {
             end={"end" in item ? item.end : false}
             className={({ isActive }) => {
               const active =
-                item.to === "/predictions"
+                item.to.startsWith("/predictions")
                   ? isPredictionsSection(location.pathname)
                   : isActive;
               return `nav-item${active ? " active" : ""}`;

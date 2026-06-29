@@ -27,9 +27,9 @@ function App() {
         <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/matches" element={<Navigate to="/predictions" replace />} />
+          <Route path="/matches" element={<Navigate to="/predictions?stage=KNOCKOUT" replace />} />
           <Route path="/predictions" element={<PredictionsPage />} />
-          <Route path="/predictions/matches" element={<Navigate to="/predictions" replace />} />
+          <Route path="/predictions/matches" element={<Navigate to="/predictions?stage=KNOCKOUT" replace />} />
           <Route path="/standings" element={<StandingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/my-points" element={<MyPointsPage />} />

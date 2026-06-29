@@ -354,7 +354,7 @@ export function UserPointsDetail({ userId, compact = false }: UserPointsDetailPr
           </strong>
           {isOwnProfile && (
             <p style={{ marginTop: "0.5rem" }}>
-              Haz predicciones en <Link to="/predictions">Partidos</Link> y, cuando el admin publique resultados,
+              Haz predicciones en <Link to="/predictions?stage=KNOCKOUT">Partidos</Link> y, cuando el admin publique resultados,
               verás aquí el detalle de cada partido y cada categoría.
             </p>
           )}
