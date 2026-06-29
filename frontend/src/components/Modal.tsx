@@ -1,4 +1,5 @@
 import { useEffect, useId, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   title: string;
@@ -28,7 +29,7 @@ export function Modal({ title, open, onClose, children, footer, wide = false }: 
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div
         className={`modal-dialog${wide ? " modal-dialog--wide" : ""}`}
@@ -48,6 +49,7 @@ export function Modal({ title, open, onClose, children, footer, wide = false }: 
         <div className="modal-body">{children}</div>
         {footer ? <footer className="modal-footer">{footer}</footer> : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

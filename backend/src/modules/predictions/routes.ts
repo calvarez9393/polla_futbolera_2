@@ -42,6 +42,7 @@ import {
 } from "../qualifiers/fromPredictions.js";
 import { fetchUserScores } from "../leaderboard/userScores.js";
 import { isGroupStageComplete } from "../scoring/qualifiers.js";
+import { getMatchScoringBreakdown } from "../matches/matchScoringBreakdown.js";
 
 const calendarQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -510,6 +511,24 @@ predictionsRouter.put("/me/bonuses", async (req, res, next) => {
       ]
     );
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+predictionsRouter.get("/matches/:id/scoring", async (req, res, next) => {
+  try {
+    const matchId = z.coerce.number().int().positive().parse(req.params.id);
+    const data = await getMatchScoringBreakdown(matchId);
+    if (!data) {
+      res.status(404).json({ message: "Partido no encontrado" });
+      return;
+    }
+    if (data.match.status !== "FINISHED") {
+      res.status(400).json({ message: "Los puntos del grupo se publican cuando el partido está finalizado." });
+      return;
+    }
+    res.json(data);
   } catch (error) {
     next(error);
   }

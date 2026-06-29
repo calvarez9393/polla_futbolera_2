@@ -13,6 +13,7 @@ import {
   showsKnockoutAdvancingUi
 } from "../lib/knockoutAdvancing";
 import { KnockoutAdvancingBanner } from "./KnockoutAdvancingBanner";
+import { MatchGroupPointsModal } from "./MatchGroupPointsModal";
 import { MatchupScoreStrip, matchupToTeams } from "./MatchupScoreStrip";
 import { sameMatchup, type PredictedMatchup } from "./predictedMatchup";
 
@@ -95,6 +96,7 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
   const [saving, setSaving] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [isError, setIsError] = useState(false);
+  const [groupPointsOpen, setGroupPointsOpen] = useState(false);
 
   const predHomeNum = parseInt(predHome, 10) || 0;
   const predAwayNum = parseInt(predAway, 10) || 0;
@@ -464,7 +466,28 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
           <div className="prediction-card-points">
             <p className="prediction-card-label">Puntos obtenidos</p>
             <PointsChips breakdown={match.earnedBreakdown} totalPoints={match.earnedPoints} />
+            {!readOnly && (
+              <button
+                type="button"
+                className="btn match-group-points-btn"
+                onClick={() => setGroupPointsOpen(true)}
+              >
+                Ver puntos de todos
+              </button>
+            )}
           </div>
+        )}
+
+        {!readOnly && (
+          <MatchGroupPointsModal
+            matchId={Number(match.id)}
+            homeTeamName={match.homeTeamName}
+            awayTeamName={match.awayTeamName}
+            homeScore={match.homeScore}
+            awayScore={match.awayScore}
+            open={groupPointsOpen}
+            onClose={() => setGroupPointsOpen(false)}
+          />
         )}
 
         {localMsg && (

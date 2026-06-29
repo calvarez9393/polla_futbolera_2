@@ -1156,6 +1156,38 @@ p {
   gap: 0.75rem;
 }
 
+.match-participants-list--striped {
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.match-participants-list--striped .match-participant-row,
+.match-participants-list--striped .match-participant-nopred {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.match-participants-list--striped .match-participant-row:last-child,
+.match-participants-list--striped .match-participant-nopred:last-child {
+  border-bottom: none;
+}
+
+.match-participants-list--striped .match-participant-row:nth-child(odd),
+.match-participants-list--striped .match-participant-nopred:nth-child(odd) {
+  background: color-mix(in srgb, var(--c-900) 88%, var(--c-800));
+}
+
+.match-participants-list--striped .match-participant-row:nth-child(even),
+.match-participants-list--striped .match-participant-nopred:nth-child(even) {
+  background: color-mix(in srgb, var(--c-800) 55%, var(--c-900));
+}
+
+.match-participant-row {
+  border-radius: 0;
+}
+
 .match-participant-head {
   display: flex;
   justify-content: space-between;
@@ -1188,6 +1220,74 @@ p {
 .match-participant-real strong {
   font-size: 1.1rem;
   font-family: var(--font-serif);
+}
+
+.match-participant-row--self,
+.match-participants-list--striped .match-participant-row--self {
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--accent) 16%, var(--c-900));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.match-participant-you {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.match-participant-ko {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.match-participant-ko-note {
+  color: var(--text-muted);
+}
+
+.match-participants-list--compact {
+  gap: 0.5rem;
+}
+
+.match-participants-accordion--nested {
+  margin-top: 1rem;
+}
+
+.match-group-points-intro {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.match-group-points-btn {
+  margin-top: 0.75rem;
+  width: 100%;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: linear-gradient(135deg, #6d28d9 0%, #9333ea 45%, #a855f7 100%);
+  border: 1px solid color-mix(in srgb, #c084fc 55%, transparent);
+  box-shadow:
+    0 4px 18px color-mix(in srgb, #7c3aed 50%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent);
+}
+
+.match-group-points-btn:hover {
+  color: #fff;
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #c084fc 100%);
+  box-shadow:
+    0 8px 26px color-mix(in srgb, #9333ea 55%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+}
+
+.match-group-points-btn:focus-visible {
+  outline: 2px solid #c084fc;
+  outline-offset: 2px;
 }
 
 .admin-match-block--solo {
@@ -2075,6 +2175,10 @@ p {
 
 .modal-dialog--wide {
   width: min(100%, 720px);
+}
+
+.modal-dialog--wide .modal-body {
+  max-height: calc(85dvh - 4.5rem);
 }
 
 @media (max-width: 480px) {
@@ -2971,19 +3075,23 @@ p {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
   background: color-mix(in srgb, var(--c-950) 65%, transparent);
   backdrop-filter: blur(4px);
+  overflow: hidden;
 }
 
 .modal-dialog {
+  display: flex;
+  flex-direction: column;
   width: min(100%, 440px);
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
+  max-height: min(85dvh, 900px);
+  overflow: hidden;
   background: var(--surface-elevated, var(--os-900));
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
@@ -2997,6 +3105,7 @@ p {
   gap: 1rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -3022,6 +3131,14 @@ p {
 
 .modal-body {
   padding: 1.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(85dvh - 4.5rem);
 }
 
 .modal-footer {
@@ -3030,6 +3147,7 @@ p {
   gap: 0.75rem;
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .modal-form {
