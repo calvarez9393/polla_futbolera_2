@@ -91,6 +91,13 @@ p {
   max-width: 1280px;
 }
 
+/* Páginas que aprovechan el ancho de pantalla (p. ej. cuadros eliminatorios por usuario). */
+.content--full {
+  max-width: min(1840px, 96vw);
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
 /* Top navigation */
 .top-nav {
   position: relative;
@@ -3841,4 +3848,240 @@ p {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* ===== Cuadro completo por usuario (admin) ===== */
+.full-bracket-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.75rem;
+}
+
+.full-bracket-legend {
+  margin-bottom: 1rem;
+}
+
+.full-bracket-tree {
+  display: flex;
+  gap: 1.25rem;
+  align-items: stretch;
+  min-width: max-content;
+}
+
+.full-bracket-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 190px;
+}
+
+.full-bracket-col-title {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand);
+  font-weight: 700;
+  text-align: center;
+}
+
+.full-bracket-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  justify-content: space-around;
+  flex: 1;
+}
+
+.full-bracket-card {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+}
+
+.full-bracket-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.full-bracket-card-num {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.full-bracket-card-pen {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.full-bracket-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.1rem;
+  font-size: 0.78rem;
+  border-radius: 5px;
+}
+
+.full-bracket-slot--win {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  font-weight: 700;
+}
+
+.full-bracket-slot-name {
+  flex: 1;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.full-bracket-slot-name--tbd {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.72rem;
+}
+
+.full-bracket-slot-score {
+  min-width: 1ch;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.full-bracket-slot--win .full-bracket-slot-score {
+  color: inherit;
+}
+
+/* Edición inline de marcadores en el cuadro del usuario (admin) */
+.full-bracket-card--dirty {
+  border-color: color-mix(in srgb, var(--brand) 60%, var(--border-subtle));
+}
+
+.full-bracket-slot--edit {
+  padding-right: 0;
+}
+
+.full-bracket-score-input {
+  width: 2.6rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 5px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface, var(--surface-elevated));
+  color: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.full-bracket-pass {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.full-bracket-pass-label {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.full-bracket-pass-btn {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.full-bracket-pass-btn.is-active {
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+  border-color: var(--brand);
+  font-weight: 700;
+}
+
+.full-bracket-save {
+  margin-top: 0.45rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  border: none;
+  background: var(--brand);
+  color: #07121f;
+  font-weight: 700;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.full-bracket-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.full-bracket-card-error {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: var(--status-live, #c0392b);
+}
+
+.admin-bracket-user-picker select {
+  margin-left: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+  color: inherit;
+}
+
+/* ===== Reparar cuadro oficial (admin) ===== */
+.admin-repair-panel {
+  margin-top: 1rem;
+}
+
+.admin-repair-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.admin-repair-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.admin-repair-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.admin-repair-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.admin-repair-list--warn {
+  color: var(--status-live, #c0392b);
+}
+
+.admin-repair-tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand);
+  font-weight: 700;
+  margin-right: 0.25rem;
 }

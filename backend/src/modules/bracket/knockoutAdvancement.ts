@@ -202,15 +202,12 @@ export async function applyResolvedTeamsToMatchRows(
 }
 
 export async function syncAllOfficialKnockoutAdvancement(tournamentId: number): Promise<number> {
-  const rows = await loadKnockoutRowsForTournament(tournamentId);
-  let total = 0;
-  for (const num of KNOCKOUT_MATCH_ORDER) {
-    const row = rows.find((r) => knockoutExternalNum(r.external_id) === num);
-    if (row?.status === "FINISHED") {
-      total += await propagateOfficialKnockoutAdvancement(row.id);
-    }
-  }
-  return total;
+  // Reconstrucción completa y auto-sanación: recoloca cada cruce según los resultados reales y
+  // recalcula el ganador de cada llave contra sus participantes actuales. Así, al corregir un
+  // partido anterior, los siguientes (incluidos los ya jugados) dejan de mostrar el equipo viejo.
+  const { repairOfficialKnockoutBracket } = await import("./knockoutRepair.js");
+  const report = await repairOfficialKnockoutBracket(tournamentId, { apply: true });
+  return report.totalChanges;
 }
 
 function nextRoundKeyLabel(roundKey: string | null | undefined): string {

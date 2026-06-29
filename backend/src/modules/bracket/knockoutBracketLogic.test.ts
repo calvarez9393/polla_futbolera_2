@@ -4,7 +4,8 @@ import {
   matchOutcomeFromPrediction,
   matchOutcomeOfficial,
   parseSlotFeed,
-  resolveKnockoutBracketTeams
+  resolveKnockoutBracketTeams,
+  resolveOfficialKnockoutBracketTeams
 } from "./knockoutBracketLogic.js";
 import type { KnockoutMatchRow } from "./knockoutBracketLogic.js";
 
@@ -156,5 +157,37 @@ describe("matchOutcomeOfficial", () => {
   it("deduce ganador oficial desde marcador", () => {
     const row = koRow(1, 73, C, D, "FINISHED", { home_score: 3, away_score: 1 });
     expect(matchOutcomeOfficial(row, C, D, TBD).winnerId).toBe(C);
+  });
+
+  it("ignora un winner_team_id que ya no es participante y usa el marcador", () => {
+    // Tras corregir un partido anterior, los participantes reales son B y C, pero quedó guardado
+    // A (equipo viejo). El ganador debe derivarse del marcador entre B y C, no ser A.
+    const row = koRow(1, 90, B, C, "FINISHED", { home_score: 2, away_score: 1, winner_team_id: A });
+    expect(matchOutcomeOfficial(row, B, C, TBD).winnerId).toBe(B);
+  });
+
+  it("respeta el ganador en penales si sigue siendo participante", () => {
+    const row = koRow(1, 90, B, C, "FINISHED", { home_score: 1, away_score: 1, winner_team_id: C });
+    expect(matchOutcomeOfficial(row, B, C, TBD).winnerId).toBe(C);
+  });
+});
+
+describe("resolveOfficialKnockoutBracketTeams (auto-sanación)", () => {
+  it("repropaga semis cuando una corrección en octavos dejó huérfano al ganador de cuartos", () => {
+    // Cadena octavos(89,90) → cuartos(97) → semifinal(101).
+    // Antes de corregir: octavos 90 lo ganaba A, que jugó y ganó cuartos 97 y pasó a semis 101.
+    // Tras corregir octavos 90 (ahora gana B), cuartos 97 pasa a ser C vs B, pero conservó su
+    // marcador (C 2-1) y un winner_team_id = A que YA NO juega ahí. El fix debe recolocar 97 e
+    // ignorar ese ganador huérfano para que a semis 101 pase C (ganador por marcador), no A.
+    const rows = [
+      koRow(1, 89, C, D, "FINISHED", { home_score: 2, away_score: 0, winner_team_id: C }),
+      koRow(2, 90, A, B, "FINISHED", { home_score: 0, away_score: 1, winner_team_id: B }),
+      koRow(3, 97, C, A, "FINISHED", { home_score: 2, away_score: 1, winner_team_id: A }),
+      koRow(4, 101, A, TBD, "NOT_STARTED")
+    ];
+    const resolved = resolveOfficialKnockoutBracketTeams(rows, TBD);
+    expect(resolved.get(97)?.homeTeamId).toBe(C); // ganador real de 89
+    expect(resolved.get(97)?.awayTeamId).toBe(B); // ahora B (octavos 90 corregido), no A
+    expect(resolved.get(101)?.homeTeamId).toBe(C); // ganador de 97 por marcador, ya no el huérfano A
   });
 });

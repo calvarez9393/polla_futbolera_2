@@ -108,10 +108,13 @@ export function matchOutcomeOfficial(
     return { winnerId: null, loserId: null };
   }
 
-  if (row.winner_team_id && Number(row.winner_team_id) !== tbdId) {
-    const winnerId = Number(row.winner_team_id);
-    const loserId = winnerId === home ? away : home;
-    return { winnerId, loserId };
+  // Solo confiamos en winner_team_id si sigue siendo uno de los participantes ACTUALES del cruce.
+  // Tras corregir un resultado anterior, el equipo que avanza puede cambiar y dejar este ganador
+  // "huérfano" (ya no juega aquí); en ese caso lo ignoramos y derivamos del marcador.
+  const storedWinner = row.winner_team_id != null ? Number(row.winner_team_id) : null;
+  if (storedWinner && storedWinner !== tbdId && (storedWinner === home || storedWinner === away)) {
+    const loserId = storedWinner === home ? away : home;
+    return { winnerId: storedWinner, loserId };
   }
   if (row.home_score != null && row.away_score != null && row.home_score !== row.away_score) {
     const winnerId = row.home_score > row.away_score ? home : away;

@@ -5,6 +5,7 @@ const links = [
   { to: "/admin/official", label: "Oficiales y bonos" },
   { to: "/admin/users", label: "Usuarios" },
   { to: "/admin/knockout", label: "Eliminatorias" },
+  { to: "/admin/brackets", label: "Cuadros por usuario" },
   { to: "/admin", label: "Configuración", end: true }
 ];
 

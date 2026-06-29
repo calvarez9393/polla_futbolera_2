@@ -16,6 +16,7 @@ import { AdminCalendarPage } from "./pages/AdminCalendarPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminOfficialPage } from "./pages/AdminOfficialPage";
 import { AdminKnockoutCompletionPage } from "./pages/AdminKnockoutCompletionPage";
+import { AdminUserBracketsPage } from "./pages/AdminUserBracketsPage";
 import { MyPointsPage } from "./pages/MyPointsPage";
 
 function App() {
@@ -72,6 +73,14 @@ function App() {
             element={
               <AdminRoute>
                 <AdminKnockoutCompletionPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/brackets"
+            element={
+              <AdminRoute>
+                <AdminUserBracketsPage />
               </AdminRoute>
             }
           />
