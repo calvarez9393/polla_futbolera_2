@@ -3,7 +3,7 @@ import { InfoModal } from "./InfoModal";
 
 const predictionLinks: { to: string; label: string; end?: boolean }[] = [
   { to: "/predictions", label: "Partidos", end: true },
-  { to: "/predictions/bracket", label: "Eliminatorias" }
+  { to: "/predictions/bracket", label: "Eliminatorias", end: true }
 ];
 
 const statsLinks = [

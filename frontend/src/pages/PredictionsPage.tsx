@@ -9,11 +9,12 @@ import {
 } from "../components/PredictionMatchCard";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
-import { toDateInputValue } from "../lib/date";
+import { pickNearestCalendarDate } from "../lib/date";
 
 interface DateRow {
   match_date: string;
   match_count: number;
+  finished_count?: number;
 }
 
 interface PublicMatchRow {
@@ -61,30 +62,37 @@ function mapPublicMatch(row: PublicMatchRow): CalendarPredictionMatch {
 
 export function PredictionsPage() {
   const token = getToken();
-  const [selectedDate, setSelectedDate] = useState(toDateInputValue(new Date()));
+  const [selectedDate, setSelectedDate] = useState("");
   const [dates, setDates] = useState<DateRow[]>([]);
-  const [stageFilter, setStageFilter] = useState<"" | "GROUP" | "KNOCKOUT">("GROUP");
+  const [stageFilter, setStageFilter] = useState<"" | "GROUP" | "KNOCKOUT">("KNOCKOUT");
   const [matches, setMatches] = useState<CalendarPredictionMatch[]>([]);
   const [loading, setLoading] = useState(false);
+  const [datesLoading, setDatesLoading] = useState(true);
   const [error, setError] = useState("");
 
   function applyLoadedDates(rows: DateRow[]) {
     setDates(rows);
     if (rows.length === 0) return;
     const keys = rows.map((d) => String(d.match_date).slice(0, 10));
-    setSelectedDate((current) =>
-      keys.includes(current) ? current : (keys.find((k) => k.startsWith("2026-06")) ?? keys[0])
-    );
+    setSelectedDate((current) => {
+      if (current && keys.includes(current)) return current;
+      const lastFinished = [...rows].reverse().find((d) => (d.finished_count ?? 0) > 0);
+      if (lastFinished) return String(lastFinished.match_date).slice(0, 10);
+      return pickNearestCalendarDate(keys);
+    });
   }
 
   useEffect(() => {
+    setDatesLoading(true);
     const params = stageFilter ? `?stage=${stageFilter}` : "";
     api<DateRow[]>(`/matches/dates${params}`)
       .then(applyLoadedDates)
-      .catch(() => setDates([]));
+      .catch(() => setDates([]))
+      .finally(() => setDatesLoading(false));
   }, [stageFilter]);
 
   const loadCalendar = useCallback(async () => {
+    if (!selectedDate) return;
     setLoading(true);
     setError("");
     try {
@@ -139,22 +147,24 @@ export function PredictionsPage() {
 
       {token && <PredictionsSubnav />}
 
-      <DateNavigator selectedDate={selectedDate} onChange={setSelectedDate} dates={dates} />
+      {selectedDate && (
+        <DateNavigator selectedDate={selectedDate} onChange={setSelectedDate} dates={dates} />
+      )}
 
       <div className="filter-row">
-        <button
-          type="button"
-          className={`btn btn-ghost${stageFilter === "GROUP" ? " active-filter" : ""}`}
-          onClick={() => setStageFilter("GROUP")}
-        >
-          Fase de grupos
-        </button>
         <button
           type="button"
           className={`btn btn-ghost${stageFilter === "KNOCKOUT" ? " active-filter" : ""}`}
           onClick={() => setStageFilter("KNOCKOUT")}
         >
           Eliminatorias
+        </button>
+        <button
+          type="button"
+          className={`btn btn-ghost${stageFilter === "GROUP" ? " active-filter" : ""}`}
+          onClick={() => setStageFilter("GROUP")}
+        >
+          Fase de grupos
         </button>
         <button
           type="button"
@@ -167,13 +177,13 @@ export function PredictionsPage() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {loading && (
+      {(datesLoading || loading) && (
         <div className="panel-card empty-state">
           <strong>Cargando…</strong>
         </div>
       )}
 
-      {!loading && matches.length === 0 && (
+      {!datesLoading && !loading && matches.length === 0 && selectedDate && (
         <div className="panel-card empty-state">
           <strong>Sin partidos este día</strong>
           <p>Prueba otra fecha o cambia el filtro de fase.</p>
@@ -181,7 +191,8 @@ export function PredictionsPage() {
       )}
 
       <div className="match-grid">
-        {!loading &&
+        {!datesLoading &&
+          !loading &&
           matches.map((match) => (
             <PredictionMatchCard
               key={match.id}

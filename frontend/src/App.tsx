@@ -29,6 +29,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/matches" element={<Navigate to="/predictions" replace />} />
           <Route path="/predictions" element={<PredictionsPage />} />
+          <Route path="/predictions/matches" element={<Navigate to="/predictions" replace />} />
           <Route path="/standings" element={<StandingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/my-points" element={<MyPointsPage />} />

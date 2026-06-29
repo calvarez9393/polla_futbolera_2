@@ -68,6 +68,7 @@ interface PredictionMatchCardProps {
   match: CalendarPredictionMatch;
   onSaved?: () => void;
   readOnly?: boolean;
+  hideKickoffTime?: boolean;
 }
 
 /** Borrador listo para enviar al endpoint de pronósticos. */
@@ -85,7 +86,7 @@ export interface PredictionMatchCardHandle {
 }
 
 export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, PredictionMatchCardProps>(
-  function PredictionMatchCard({ match, onSaved, readOnly = false }, ref) {
+  function PredictionMatchCard({ match, onSaved, readOnly = false, hideKickoffTime = false }, ref) {
   const [predHome, setPredHome] = useState(String(match.prediction?.predictedHomeScore ?? 0));
   const [predAway, setPredAway] = useState(String(match.prediction?.predictedAwayScore ?? 0));
   const [advancingId, setAdvancingId] = useState<number | "">(
@@ -346,7 +347,12 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
         {match.groupName && <span className="badge badge-scheduled">{match.groupName}</span>}
         {match.roundLabel && <span>{match.roundLabel}</span>}
         {match.matchday != null && <span>Fecha {match.matchday}</span>}
-        <span>{formatKickoffLocal({ kickoff_time_local: match.kickoffTimeLocal, starts_at: match.startsAt })} (hora sede)</span>
+        {!hideKickoffTime && (
+          <span>
+            {formatKickoffLocal({ kickoff_time_local: match.kickoffTimeLocal, starts_at: match.startsAt })}{" "}
+            (hora sede)
+          </span>
+        )}
         {canPredict ? (
           <span className="badge badge-scheduled">
             Abierto hasta{" "}

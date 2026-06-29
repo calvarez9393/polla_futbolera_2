@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { clearSession, getUser, isAuthenticated } from "../lib/auth";
 
 const baseLinks = [
@@ -7,8 +7,13 @@ const baseLinks = [
   { to: "/leaderboard", label: "Ranking" }
 ];
 
+function isPredictionsSection(pathname: string): boolean {
+  return pathname === "/predictions" || pathname.startsWith("/predictions/");
+}
+
 export function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const authed = isAuthenticated();
   const user = getUser();
 
@@ -33,7 +38,13 @@ export function Navbar() {
             key={item.to}
             to={item.to}
             end={"end" in item ? item.end : false}
-            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+            className={({ isActive }) => {
+              const active =
+                item.to === "/predictions"
+                  ? isPredictionsSection(location.pathname)
+                  : isActive;
+              return `nav-item${active ? " active" : ""}`;
+            }}
           >
             {item.label}
           </NavLink>

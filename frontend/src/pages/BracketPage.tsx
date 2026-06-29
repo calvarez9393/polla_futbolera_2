@@ -28,6 +28,23 @@ interface BatchResult {
   errors: Array<{ matchId: number; message: string }>;
 }
 
+const ROUND_ORDER = ["R16", "R8", "R4", "SF", "TP3", "F"];
+
+/** Ronda en juego: la más avanzada (octavos→cuartos→semis→…) que ya tiene algún partido finalizado. */
+function latestFinishedRound(rounds: BracketRound[]): string | null {
+  let bestKey: string | null = null;
+  let bestIdx = -1;
+  for (const round of rounds) {
+    if (!round.matches.some((m) => m.status === "FINISHED")) continue;
+    const idx = ROUND_ORDER.indexOf(round.roundKey);
+    if (idx > bestIdx) {
+      bestIdx = idx;
+      bestKey = round.roundKey;
+    }
+  }
+  return bestKey;
+}
+
 export function BracketPage() {
   const [rounds, setRounds] = useState<BracketRound[]>([]);
   const [globalWindow, setGlobalWindow] = useState<{
@@ -42,6 +59,8 @@ export function BracketPage() {
   const [roundMsg, setRoundMsg] = useState<Record<string, { text: string; error: boolean }>>({});
   const [error, setError] = useState("");
   const cardRefs = useRef<Map<number, PredictionMatchCardHandle | null>>(new Map());
+  // Solo en la primera carga enfocamos la ronda en juego; después respetamos lo que abra/cierre el usuario.
+  const focusedInitialRound = useRef(false);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -57,6 +76,16 @@ export function BracketPage() {
       setGlobalWindow(data.knockoutGlobalWindow ?? null);
       setGroupStageComplete(data.groupStageComplete ?? false);
       setError("");
+
+      // Al entrar, deja abierta solo la ronda más avanzada con partidos finalizados (octavos,
+      // cuartos, semis…) y colapsa las demás, para caer directo en lo que se está jugando.
+      if (!focusedInitialRound.current && data.rounds.length > 0) {
+        focusedInitialRound.current = true;
+        const active = latestFinishedRound(data.rounds);
+        if (active) {
+          setCollapsed(new Set(data.rounds.map((r) => r.roundKey).filter((k) => k !== active)));
+        }
+      }
     } catch (e) {
       setError((e as Error).message);
       if (!silent) setRounds([]);
@@ -325,6 +354,7 @@ export function BracketPage() {
                             ref={setCardRef(Number(match.id))}
                             match={match}
                             onSaved={onMatchSaved}
+                            hideKickoffTime
                           />
                         ))}
                       </div>

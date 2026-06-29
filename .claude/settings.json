@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /home/daniiv/Documentos/python/polla_futbolera_2/backend && npm run typecheck 2>&1 | tail -3 && echo \"=== FRONT ===\" && cd ../frontend && npm run typecheck 2>&1 | tail -3 && echo \"=== TESTS ===\" && cd ../backend && DATABASE_URL=\"postgres://x:x@localhost:5432/x\" JWT_SECRET=\"testsecret_testsecret_testsecret\" npx vitest run src 2>&1 | tail -4)",
+      "Read(//home/daniiv/Documentos/python/**)"
+    ]
+  }
+}
