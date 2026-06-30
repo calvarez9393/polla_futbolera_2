@@ -288,6 +288,9 @@ function SnapshotResyncPanel() {
   );
 }
 
+/** Contraseña para autorizar cambios en los cuadros de los usuarios. */
+const BRACKET_EDIT_PASSWORD = "daniel";
+
 export function AdminUserBracketsPage() {
   const [users, setUsers] = useState<CompletionUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -295,6 +298,8 @@ export function AdminUserBracketsPage() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingBracket, setLoadingBracket] = useState(false);
   const [error, setError] = useState("");
+  // Una vez ingresada la contraseña correcta no se vuelve a pedir en la sesión.
+  const [editUnlocked, setEditUnlocked] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
@@ -337,13 +342,23 @@ export function AdminUserBracketsPage() {
   const savePrediction = useCallback(
     async (payload: SavePredictionPayload) => {
       if (selectedUserId == null) return;
+      if (!editUnlocked) {
+        const entered = window.prompt("Contraseña para guardar cambios en los cuadros:");
+        if (entered == null) {
+          throw new Error("Guardado cancelado");
+        }
+        if (entered.trim() !== BRACKET_EDIT_PASSWORD) {
+          throw new Error("Contraseña incorrecta");
+        }
+        setEditUnlocked(true);
+      }
       const res = await api<{ matches: FullBracketMatch[] }>(
         `/admin/knockout-bracket/${selectedUserId}/prediction`,
         { method: "PUT", body: JSON.stringify(payload) }
       );
       setMatches(res.matches);
     },
-    [selectedUserId]
+    [selectedUserId, editUnlocked]
   );
 
   return (
