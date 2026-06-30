@@ -70,6 +70,7 @@ export function mapCalendarMatchRow(
         : null,
     predictedMatchup,
     officialMatchup,
+    officialMatchupDefined: Boolean(row.official_matchup_defined),
     advancingTeamId: row.advancingTeamId ? Number(row.advancingTeamId) : null,
     advancingTeamName: (row.advancingTeamName as string) ?? null,
     advancingTeamLogoUrl: (row.advancingTeamLogoUrl as string | null) ?? null,

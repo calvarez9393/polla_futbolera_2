@@ -62,6 +62,7 @@ export interface CalendarPredictionMatch {
   } | null;
   predictedMatchup?: PredictedMatchup | null;
   officialMatchup?: PredictedMatchup | null;
+  officialMatchupDefined?: boolean;
   earnedPoints: number | null;
   earnedBreakdown: Record<string, number> | null;
 }
@@ -215,6 +216,17 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
     match.stage === "KNOCKOUT" && match.prediction != null && savedMatchup != null;
 
   const officialTeams = match.officialMatchup ? matchupToTeams(match.officialMatchup) : null;
+  const officialDiffersFromSaved =
+    savedMatchup != null &&
+    match.officialMatchup != null &&
+    !sameMatchup(savedMatchup, match.officialMatchup);
+  // Cruce real ya definido (ambos clasificados conocidos): mostrarlo apenas se conoce la
+  // llave, sin esperar a que el partido termine.
+  const showOfficialEarly =
+    officialTeams != null &&
+    match.status !== "FINISHED" &&
+    Boolean(match.officialMatchupDefined) &&
+    officialDiffersFromSaved;
 
   async function savePrediction() {
     if (needsAdvancingOnDraw && isDrawPrediction && !effectiveAdvancingId) {
@@ -275,6 +287,16 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
               className="matchup-score-strip--in-card matchup-score-strip--official"
               variant="compact"
               label="Resultado real"
+              teams={officialTeams}
+              homeScore={match.homeScore}
+              awayScore={match.awayScore}
+            />
+          )}
+          {showOfficialEarly && officialTeams && (
+            <MatchupScoreStrip
+              className="matchup-score-strip--in-card matchup-score-strip--official"
+              variant="compact"
+              label="Cruce real (ya definido)"
               teams={officialTeams}
               homeScore={match.homeScore}
               awayScore={match.awayScore}

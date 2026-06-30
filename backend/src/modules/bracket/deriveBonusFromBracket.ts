@@ -20,6 +20,7 @@ import {
   type CalculateBonusScoresResult
 } from "../scoring/bonuses.js";
 import { resolveKnockoutAdvancingTeamId } from "./knockoutAdvancingResolve.js";
+import { loadOfficialR16SlotsMap } from "./r16Service.js";
 
 export interface DerivedBracketBonusPicks {
   championTeamId: number | null;
@@ -357,6 +358,156 @@ export async function deriveOfficialBonusFromRealBracket(
   return buildOfficialBracketBonusPicks(rows, roundByMatchId, resolved, tbdId);
 }
 
+interface BonusUpsertRow {
+  userId: number;
+  championTeamId: number | null;
+  runnerUpTeamId: number | null;
+  thirdPlaceTeamId: number | null;
+  semifinalistTeamIds: number[];
+  finalistTeamIds: number[];
+  topScorer: string | null;
+  topAssister: string | null;
+}
+
+/** Predicciones de varios usuarios en una sola consulta, agrupadas por usuario. */
+async function loadPredictionsByUser(
+  userIds: number[],
+  matchIds: number[]
+): Promise<Map<number, Map<number, UserPredictionRow>>> {
+  const byUser = new Map<number, Map<number, UserPredictionRow>>();
+  if (userIds.length === 0 || matchIds.length === 0) return byUser;
+
+  const result = await pool.query(
+    `SELECT user_id, match_id, predicted_home_score, predicted_away_score, predicted_advancing_team_id
+     FROM predictions
+     WHERE user_id = ANY($1::bigint[]) AND match_id = ANY($2::bigint[])`,
+    [userIds, matchIds]
+  );
+  for (const row of result.rows) {
+    const uid = Number(row.user_id);
+    let perMatch = byUser.get(uid);
+    if (!perMatch) {
+      perMatch = new Map();
+      byUser.set(uid, perMatch);
+    }
+    perMatch.set(Number(row.match_id), {
+      predicted_home_score:
+        row.predicted_home_score != null ? Number(row.predicted_home_score) : null,
+      predicted_away_score:
+        row.predicted_away_score != null ? Number(row.predicted_away_score) : null,
+      predicted_advancing_team_id:
+        row.predicted_advancing_team_id != null ? Number(row.predicted_advancing_team_id) : null
+    });
+  }
+  return byUser;
+}
+
+/** Upsert masivo del cuadro de premios; conserva goleador/asistidor igual que la versión por usuario. */
+async function upsertBonusPredictionsBatch(rows: BonusUpsertRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const params: unknown[] = [];
+    const tuples: string[] = [];
+    for (const r of chunk) {
+      const base = params.length;
+      tuples.push(
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}::bigint[], $${base + 6}::bigint[], $${base + 7}, $${base + 8})`
+      );
+      params.push(
+        r.userId,
+        r.championTeamId,
+        r.runnerUpTeamId,
+        r.thirdPlaceTeamId,
+        r.semifinalistTeamIds,
+        r.finalistTeamIds,
+        r.topScorer,
+        r.topAssister
+      );
+    }
+    await pool.query(
+      `INSERT INTO bonus_predictions (
+        user_id, champion_team_id, runner_up_team_id, third_place_team_id,
+        semifinalist_team_ids, finalist_team_ids, top_scorer, top_assister
+      ) VALUES ${tuples.join(", ")}
+      ON CONFLICT (user_id) DO UPDATE SET
+        champion_team_id = EXCLUDED.champion_team_id,
+        runner_up_team_id = EXCLUDED.runner_up_team_id,
+        third_place_team_id = EXCLUDED.third_place_team_id,
+        semifinalist_team_ids = EXCLUDED.semifinalist_team_ids,
+        finalist_team_ids = EXCLUDED.finalist_team_ids`,
+      params
+    );
+  }
+}
+
+/**
+ * Versión batcheada de `syncUserBonusPicksFromBracket` para TODOS los usuarios: carga una sola vez
+ * los datos constantes del torneo (rows del cuadro, TBD, slots R16 oficiales, ronda por partido) y
+ * todas las predicciones en una consulta, resuelve cada cuadro en memoria y escribe en lote. El
+ * resultado por usuario es idéntico al de la versión por usuario, pero sin las ~10 consultas/usuario.
+ */
+export async function syncAllUsersBonusPicksFromBracket(): Promise<number> {
+  const tournamentId = await getActiveTournamentId();
+  if (!tournamentId) return 0;
+
+  const rows = await loadKnockoutRowsForTournament(tournamentId);
+  if (rows.length === 0) return 0;
+
+  const tbdId = await getTbdTeamId();
+  const matchIds = rows.map((r) => r.id);
+  const r16Official = await loadOfficialR16SlotsMap(tournamentId);
+
+  const roundByMatchId = new Map<number, string>();
+  const roundRows = await pool.query(
+    `SELECT id, round_key FROM matches WHERE tournament_id = $1 AND stage = 'KNOCKOUT'`,
+    [tournamentId]
+  );
+  for (const r of roundRows.rows) {
+    roundByMatchId.set(Number(r.id), String(r.round_key ?? ""));
+  }
+
+  const usersResult = await pool.query(`SELECT id FROM users WHERE role = 'USER'`);
+  const userIds = usersResult.rows.map((u) => Number(u.id));
+  if (userIds.length === 0) return 0;
+
+  const predsByUser = await loadPredictionsByUser(userIds, matchIds);
+
+  const extrasByUser = new Map<number, { topScorer: string | null; topAssister: string | null }>();
+  const extrasResult = await pool.query(
+    `SELECT user_id, top_scorer, top_assister FROM bonus_predictions WHERE user_id = ANY($1::bigint[])`,
+    [userIds]
+  );
+  for (const r of extrasResult.rows) {
+    extrasByUser.set(Number(r.user_id), {
+      topScorer: (r.top_scorer as string | null) ?? null,
+      topAssister: (r.top_assister as string | null) ?? null
+    });
+  }
+
+  const emptyPreds = new Map<number, UserPredictionRow>();
+  const upserts: BonusUpsertRow[] = userIds.map((userId) => {
+    const preds = predsByUser.get(userId) ?? emptyPreds;
+    const resolved = resolveKnockoutBracketTeams(rows, preds, tbdId, r16Official);
+    const derived = buildDerivedBracketBonusPicks(rows, roundByMatchId, resolved, preds, tbdId);
+    const extras = extrasByUser.get(userId);
+    return {
+      userId,
+      championTeamId: derived.championTeamId,
+      runnerUpTeamId: derived.runnerUpTeamId,
+      thirdPlaceTeamId: derived.thirdPlaceTeamId,
+      semifinalistTeamIds: derived.semifinalistTeamIds,
+      finalistTeamIds: derived.finalistTeamIds,
+      topScorer: extras?.topScorer ?? null,
+      topAssister: extras?.topAssister ?? null
+    };
+  });
+
+  await upsertBonusPredictionsBatch(upserts);
+  return userIds.length;
+}
+
 /** Actualiza resultados oficiales de bonos (finalistas reales) y puntúa vs cuadro de cada usuario. */
 export async function syncOfficialBonusResultsAndScore(): Promise<
   CalculateBonusScoresResult & { official: OfficialBonusResults }
@@ -385,10 +536,7 @@ export async function syncOfficialBonusResultsAndScore(): Promise<
   };
   await setOfficialBonusResults(official);
 
-  const users = await pool.query(`SELECT id FROM users WHERE role = 'USER'`);
-  for (const u of users.rows) {
-    await syncUserBonusPicksFromBracket(Number(u.id));
-  }
+  await syncAllUsersBonusPicksFromBracket();
 
   const { calculateBonusScores } = await import("../scoring/bonuses.js");
   const scoring = await calculateBonusScores();

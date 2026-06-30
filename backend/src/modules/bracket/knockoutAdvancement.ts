@@ -170,6 +170,11 @@ export async function applyResolvedTeamsToMatchRows(
     row.official_away_team_name = row.away_team_name;
     row.official_home_team_logo_url = row.home_team_logo_url;
     row.official_away_team_logo_url = row.away_team_logo_url;
+    // El cruce real queda "definido" cuando ambos clasificados ya se conocen (no son TBD),
+    // aunque el partido todavía no se juegue.
+    row.official_matchup_defined =
+      Number(row.official_home_team_id) !== Number(tbdId) &&
+      Number(row.official_away_team_id) !== Number(tbdId);
 
     const matchId = Number(row.id);
     const snap = snapshots.get(matchId);
