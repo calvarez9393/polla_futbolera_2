@@ -87,3 +87,14 @@ export async function fetchLeaderboard(includeAllRoles = false): Promise<Leaderb
     late_stage_points: Number(row.late_stage_points)
   }));
 }
+
+/**
+ * Total recaudado para el bote: suma lo pagado por TODOS los participantes (role USER), incluidos los
+ * desactivados. Un jugador que ya puso su plata la deja en el bote aunque después salga del ranking.
+ */
+export async function fetchTotalCollected(): Promise<number> {
+  const result = await pool.query(
+    `SELECT COALESCE(SUM(amount_paid), 0)::int AS total FROM users WHERE role = 'USER'`
+  );
+  return Number(result.rows[0]?.total ?? 0);
+}

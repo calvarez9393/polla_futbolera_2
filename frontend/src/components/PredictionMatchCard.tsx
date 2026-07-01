@@ -216,17 +216,12 @@ export const PredictionMatchCard = forwardRef<PredictionMatchCardHandle, Predict
     match.stage === "KNOCKOUT" && match.prediction != null && savedMatchup != null;
 
   const officialTeams = match.officialMatchup ? matchupToTeams(match.officialMatchup) : null;
-  const officialDiffersFromSaved =
-    savedMatchup != null &&
-    match.officialMatchup != null &&
-    !sameMatchup(savedMatchup, match.officialMatchup);
-  // Cruce real ya definido (ambos clasificados conocidos): mostrarlo apenas se conoce la
-  // llave, sin esperar a que el partido termine.
+  // Cruce real ya definido (ambos clasificados conocidos): mostrarlo abajo apenas se conoce la
+  // llave, sin esperar el resultado y aunque coincida con lo que predijo el usuario.
   const showOfficialEarly =
     officialTeams != null &&
     match.status !== "FINISHED" &&
-    Boolean(match.officialMatchupDefined) &&
-    officialDiffersFromSaved;
+    Boolean(match.officialMatchupDefined);
 
   async function savePrediction() {
     if (needsAdvancingOnDraw && isDrawPrediction && !effectiveAdvancingId) {

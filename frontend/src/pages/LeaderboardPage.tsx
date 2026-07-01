@@ -13,6 +13,11 @@ interface LeaderRow {
   total_points: number;
 }
 
+interface LeaderboardResponse {
+  players: LeaderRow[];
+  totalCollected: number;
+}
+
 interface ViewPlayer {
   userId: number;
   name: string;
@@ -38,18 +43,24 @@ function rankClass(index: number): string {
 
 export function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderRow[]>([]);
+  const [totalRecaudo, setTotalRecaudo] = useState(0);
   const [loading, setLoading] = useState(true);
   const [viewPlayer, setViewPlayer] = useState<ViewPlayer | null>(null);
   const me = getUser();
 
   useEffect(() => {
-    api<LeaderRow[]>("/leaderboard")
-      .then(setRows)
-      .catch(() => setRows([]))
+    api<LeaderboardResponse>("/leaderboard")
+      .then((res) => {
+        setRows(res.players);
+        setTotalRecaudo(res.totalCollected);
+      })
+      .catch(() => {
+        setRows([]);
+        setTotalRecaudo(0);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const totalRecaudo = rows.reduce((sum, r) => sum + Number(r.amount_paid ?? 0), 0);
   const premio = totalRecaudo * 0.7;
   const primero = premio * 0.5;
   const segundo = premio * 0.3;

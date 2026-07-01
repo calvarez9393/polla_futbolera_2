@@ -6,7 +6,11 @@
       "Bash(echo \"TYPECHECK_EXIT:$?\")",
       "Bash(DATABASE_URL=\"postgres://x:x@localhost:5432/x\" JWT_SECRET=\"testsecret_1234567890\" API_FOOTBALL_KEY=\"testkey1234567890abcdef\" npx vitest run src)",
       "Bash(DATABASE_URL=\"postgresql://polla:polla_secret@localhost:5432/polla_futbolera\" JWT_SECRET=\"testsecret_1234567890\" API_FOOTBALL_KEY=\"testkey1234567890abcdef\" npx tsx \"/tmp/claude-1000/-home-daniiv-Documentos-python-polla-futbolera-2/b86bdd63-ad47-4f60-b83c-6b1dc48462a4/scratchpad/verifyBonusBatch.ts\")",
-      "Bash(DATABASE_URL=\"postgresql://polla:polla_secret@localhost:5432/polla_futbolera\" JWT_SECRET=\"testsecret_1234567890\" API_FOOTBALL_KEY=\"testkey1234567890abcdef\" npx tsx \"/tmp/claude-1000/-home-daniiv-Documentos-python-polla-futbolera-2/b86bdd63-ad47-4f60-b83c-6b1dc48462a4/scratchpad/smokeBatch.ts\")"
+      "Bash(DATABASE_URL=\"postgresql://polla:polla_secret@localhost:5432/polla_futbolera\" JWT_SECRET=\"testsecret_1234567890\" API_FOOTBALL_KEY=\"testkey1234567890abcdef\" npx tsx \"/tmp/claude-1000/-home-daniiv-Documentos-python-polla-futbolera-2/b86bdd63-ad47-4f60-b83c-6b1dc48462a4/scratchpad/smokeBatch.ts\")",
+      "Bash(grep -rnE '\"/leaderboard\"|/leaderboard`|api.*leaderboard' src)",
+      "Bash(echo \"BE_EXIT:$?\")",
+      "Bash(echo \"FE_EXIT:$?\")",
+      "Bash(PGPASSWORD=polla_secret psql -h localhost -p 5432 -U polla -d polla_futbolera -t -c ' *)"
     ]
   }
 }

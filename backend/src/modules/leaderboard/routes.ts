@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { fetchLeaderboard } from "./stats.js";
+import { fetchLeaderboard, fetchTotalCollected } from "./stats.js";
 import { fetchUserScores, isLeaderboardParticipant } from "./userScores.js";
 
 export const leaderboardRouter = Router();
@@ -11,8 +11,11 @@ const userIdParamSchema = z.object({
 
 leaderboardRouter.get("/", async (_req, res, next) => {
   try {
-    const rows = await fetchLeaderboard(false);
-    res.json(rows);
+    const [players, totalCollected] = await Promise.all([
+      fetchLeaderboard(false),
+      fetchTotalCollected()
+    ]);
+    res.json({ players, totalCollected });
   } catch (error) {
     next(error);
   }
