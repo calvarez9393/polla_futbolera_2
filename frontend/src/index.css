@@ -4203,3 +4203,69 @@ p {
   font-weight: 700;
   margin-right: 0.25rem;
 }
+
+/* Auditoría de puntos por fecha de generación (matriz usuario × fecha con totales) */
+.audit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+.audit-summary .audit-stat {
+  display: flex;
+  flex-direction: column;
+}
+.audit-summary .audit-stat b {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+.audit-summary .audit-stat span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.audit-table {
+  min-width: max-content;
+  font-size: 0.85rem;
+}
+.audit-table th,
+.audit-table td {
+  white-space: nowrap;
+}
+.audit-table .audit-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.audit-table td.audit-zero {
+  color: var(--text-muted);
+}
+.audit-table .audit-user-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--purple-card);
+  text-align: left;
+}
+.audit-table thead th.audit-user-cell {
+  z-index: 2;
+}
+.audit-table .audit-total-col {
+  font-weight: 700;
+  border-left: 1px solid var(--purple-border);
+}
+.audit-table tfoot td {
+  border-top: 2px solid var(--purple-border);
+  font-weight: 700;
+}
+.audit-user-name {
+  font-weight: 600;
+}
+.audit-user-code {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.audit-row--inactive {
+  opacity: 0.5;
+}

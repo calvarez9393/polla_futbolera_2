@@ -6,6 +6,7 @@ const links = [
   { to: "/admin/users", label: "Usuarios" },
   { to: "/admin/knockout", label: "Eliminatorias" },
   { to: "/admin/brackets", label: "Cuadros por usuario" },
+  { to: "/admin/scoring-audit", label: "Auditoría de puntos" },
   { to: "/admin", label: "Configuración", end: true }
 ];
 

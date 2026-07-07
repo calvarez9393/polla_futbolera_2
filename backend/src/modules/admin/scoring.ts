@@ -283,3 +283,88 @@ adminScoringRouter.get("/official/context", async (_req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Auditoría de puntos por fecha de generación: para cada usuario, cuántos puntos se le generaron
+ * en cada día (updated_at de prediction_scores, en hora local Colombia). Devuelve la matriz
+ * usuario × fecha con totales por fila (usuario), por columna (fecha) y total general, para poder
+ * cuadrar la tabla y detectar errores. La suma de un usuario coincide con su total del ranking.
+ */
+adminScoringRouter.get("/scoring-audit", async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         ps.user_id,
+         u.email,
+         u.display_name,
+         u.is_active,
+         u.role,
+         to_char((ps.updated_at AT TIME ZONE 'America/Bogota')::date, 'YYYY-MM-DD') AS gen_date,
+         SUM(ps.points)::int AS points,
+         COUNT(*)::int AS entries
+       FROM prediction_scores ps
+       JOIN users u ON u.id = ps.user_id
+       GROUP BY ps.user_id, u.email, u.display_name, u.is_active, u.role, gen_date`
+    );
+
+    interface AuditRow {
+      userId: number;
+      code: string;
+      displayName: string | null;
+      isActive: boolean;
+      role: string;
+      byDate: Record<string, number>;
+      entriesByDate: Record<string, number>;
+      total: number;
+    }
+
+    const datesSet = new Set<string>();
+    const usersMap = new Map<number, AuditRow>();
+    const columnTotals: Record<string, number> = {};
+    let grandTotal = 0;
+
+    for (const row of result.rows) {
+      const userId = Number(row.user_id);
+      const date = row.gen_date as string;
+      const points = Number(row.points);
+      const entries = Number(row.entries);
+      datesSet.add(date);
+
+      let user = usersMap.get(userId);
+      if (!user) {
+        user = {
+          userId,
+          code: row.email as string,
+          displayName: (row.display_name as string | null) ?? null,
+          isActive: Boolean(row.is_active),
+          role: row.role as string,
+          byDate: {},
+          entriesByDate: {},
+          total: 0
+        };
+        usersMap.set(userId, user);
+      }
+
+      user.byDate[date] = (user.byDate[date] ?? 0) + points;
+      user.entriesByDate[date] = (user.entriesByDate[date] ?? 0) + entries;
+      user.total += points;
+      columnTotals[date] = (columnTotals[date] ?? 0) + points;
+      grandTotal += points;
+    }
+
+    const dates = [...datesSet].sort();
+    const rows = [...usersMap.values()].sort(
+      (a, b) => b.total - a.total || a.code.localeCompare(b.code, "es", { numeric: true })
+    );
+
+    res.json({
+      dates,
+      rows,
+      columnTotals,
+      grandTotal,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});

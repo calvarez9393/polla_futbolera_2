@@ -17,6 +17,7 @@ import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminOfficialPage } from "./pages/AdminOfficialPage";
 import { AdminKnockoutCompletionPage } from "./pages/AdminKnockoutCompletionPage";
 import { AdminUserBracketsPage } from "./pages/AdminUserBracketsPage";
+import { AdminScoringAuditPage } from "./pages/AdminScoringAuditPage";
 import { MyPointsPage } from "./pages/MyPointsPage";
 
 function App() {
@@ -82,6 +83,14 @@ function App() {
             element={
               <AdminRoute>
                 <AdminUserBracketsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/scoring-audit"
+            element={
+              <AdminRoute>
+                <AdminScoringAuditPage />
               </AdminRoute>
             }
           />
