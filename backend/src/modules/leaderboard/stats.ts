@@ -56,7 +56,7 @@ export async function fetchLeaderboard(includeAllRoles = false): Promise<Leaderb
         (
           SELECT SUM(ps2.points)::int
           FROM prediction_scores ps2
-          JOIN matches m2 ON m2.id = ps2.source_id AND ps2.source_type = 'MATCH'
+          JOIN matches m2 ON m2.id = ps2.source_id AND ps2.source_type IN ('MATCH', 'BRACKET_PRIZE')
           WHERE ps2.user_id = u.id
             AND m2.round_key IN ('SF', 'F')
         ),

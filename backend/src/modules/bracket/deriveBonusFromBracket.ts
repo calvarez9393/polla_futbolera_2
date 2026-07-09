@@ -30,6 +30,16 @@ export interface DerivedBracketBonusPicks {
   finalistTeamIds: number[];
 }
 
+export interface OfficialBracketBonusPicks extends DerivedBracketBonusPicks {
+  /**
+   * Partido (matches.id) que consagró a cada equipo: el de la ronda anterior que ganó o, si el
+   * cruce se fijó a mano sin resultado, el cruce de la ronda donde aparece. Sirve para asignar el
+   * premio (semifinalista/finalista) a ese partido en vez de al cuadro de bonus.
+   */
+  semifinalistSourceMatchIds: Record<string, number>;
+  finalistSourceMatchIds: Record<string, number>;
+}
+
 function uniqueValidTeamIds(ids: Array<number | string>, tbdId: number): number[] {
   const seen = new Set<number>();
   const out: number[] = [];
@@ -251,22 +261,26 @@ export function buildOfficialBracketBonusPicks(
   roundByMatchId: Map<number, string>,
   resolved: Map<number, { homeTeamId: number; awayTeamId: number }>,
   tbdId: number
-): DerivedBracketBonusPicks {
-  const teamsInRound = (roundKey: string): number[] => {
-    const ids: number[] = [];
+): OfficialBracketBonusPicks {
+  // equipo → matches.id del cruce de esa ronda donde aparece.
+  const participantsWithMatch = (roundKey: string): Map<number, number> => {
+    const map = new Map<number, number>();
     for (const row of rows) {
       if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
       const num = knockoutExternalNum(row.external_id);
       if (num == null) continue;
       const slot = resolved.get(num);
       if (!slot) continue;
-      ids.push(slot.homeTeamId, slot.awayTeamId);
+      for (const teamId of [Number(slot.homeTeamId), Number(slot.awayTeamId)]) {
+        if (teamId && teamId !== tbdId && !map.has(teamId)) map.set(teamId, Number(row.id));
+      }
     }
-    return uniqueValidTeamIds(ids, tbdId);
+    return map;
   };
 
-  const advancingWinnersInRound = (roundKey: string): number[] => {
-    const ids: number[] = [];
+  // equipo → matches.id del partido de esa ronda que GANÓ.
+  const winnersWithMatch = (roundKey: string): Map<number, number> => {
+    const map = new Map<number, number>();
     for (const row of rows) {
       if (roundByMatchId.get(Number(row.id))?.toUpperCase() !== roundKey) continue;
       const num = knockoutExternalNum(row.external_id);
@@ -274,21 +288,23 @@ export function buildOfficialBracketBonusPicks(
       const slot = resolved.get(num);
       if (!slot) continue;
       const adv = advancingFromOfficial(row, slot.homeTeamId, slot.awayTeamId, tbdId);
-      if (adv) ids.push(adv);
+      if (adv && adv !== tbdId && !map.has(adv)) map.set(adv, Number(row.id));
     }
-    return uniqueValidTeamIds(ids, tbdId);
+    return map;
   };
 
-  const mergeRounds = (...roundKeys: string[]): number[] => {
-    const ids: number[] = [];
-    for (const key of roundKeys) {
-      ids.push(...teamsInRound(key), ...advancingWinnersInRound(key));
-    }
-    return uniqueValidTeamIds(ids, tbdId);
-  };
+  // Un equipo logra el hito solo cuando LLEGA a esa ronda: aparece en un cruce de la ronda o ganó
+  // el partido de la ronda anterior. Incluir a los participantes de la ronda previa premiaría
+  // antes de tiempo (p. ej. todo cuartofinalista contaría como "semifinalista"). El partido que
+  // consagra el hito es el que ganó; la mera aparición en el cruce queda como respaldo para
+  // cruces fijados a mano sin resultado previo.
+  const semiSources = participantsWithMatch("SF");
+  for (const [teamId, matchId] of winnersWithMatch("R4")) semiSources.set(teamId, matchId);
+  const finalSources = participantsWithMatch("F");
+  for (const [teamId, matchId] of winnersWithMatch("SF")) finalSources.set(teamId, matchId);
 
-  const semifinalistTeamIds = mergeRounds("SF", "R4");
-  const finalistTeamIds = mergeRounds("F", "SF");
+  const semifinalistTeamIds = uniqueValidTeamIds([...semiSources.keys()], tbdId);
+  const finalistTeamIds = uniqueValidTeamIds([...finalSources.keys()], tbdId);
 
   let championTeamId: number | null = null;
   let runnerUpTeamId: number | null = null;
@@ -315,29 +331,38 @@ export function buildOfficialBracketBonusPicks(
     }
   }
 
-  const finalWinners = advancingWinnersInRound("F");
+  const finalWinners = [...winnersWithMatch("F").keys()];
   if (!championTeamId && finalWinners.length === 1) {
     championTeamId = finalWinners[0];
   }
+
+  const cappedSemifinalists = semifinalistTeamIds.slice(0, 4);
+  const cappedFinalists = finalistTeamIds.slice(0, 2);
+  const sourcesFor = (ids: number[], map: Map<number, number>): Record<string, number> =>
+    Object.fromEntries(ids.filter((id) => map.has(id)).map((id) => [String(id), map.get(id) as number]));
 
   return {
     championTeamId,
     runnerUpTeamId,
     thirdPlaceTeamId,
-    semifinalistTeamIds: semifinalistTeamIds.slice(0, 4),
-    finalistTeamIds: finalistTeamIds.slice(0, 2)
+    semifinalistTeamIds: cappedSemifinalists,
+    finalistTeamIds: cappedFinalists,
+    semifinalistSourceMatchIds: sourcesFor(cappedSemifinalists, semiSources),
+    finalistSourceMatchIds: sourcesFor(cappedFinalists, finalSources)
   };
 }
 
 export async function deriveOfficialBonusFromRealBracket(
   tournamentId: number
-): Promise<DerivedBracketBonusPicks> {
-  const empty: DerivedBracketBonusPicks = {
+): Promise<OfficialBracketBonusPicks> {
+  const empty: OfficialBracketBonusPicks = {
     championTeamId: null,
     runnerUpTeamId: null,
     thirdPlaceTeamId: null,
     semifinalistTeamIds: [],
-    finalistTeamIds: []
+    finalistTeamIds: [],
+    semifinalistSourceMatchIds: {},
+    finalistSourceMatchIds: {}
   };
 
   const rows = await loadKnockoutRowsForTournament(tournamentId);
@@ -532,7 +557,9 @@ export async function syncOfficialBonusResultsAndScore(): Promise<
     runnerUpTeamId: derived.runnerUpTeamId,
     thirdPlaceTeamId: derived.thirdPlaceTeamId,
     semifinalistTeamIds: derived.semifinalistTeamIds,
-    finalistTeamIds: derived.finalistTeamIds
+    finalistTeamIds: derived.finalistTeamIds,
+    semifinalistSourceMatchIds: derived.semifinalistSourceMatchIds,
+    finalistSourceMatchIds: derived.finalistSourceMatchIds
   };
   await setOfficialBonusResults(official);
 

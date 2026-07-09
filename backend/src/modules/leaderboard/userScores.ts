@@ -66,7 +66,8 @@ function mapExtraScore(
         ...base,
         section: "bonuses" as const,
         title: "Cuadro y premios especiales",
-        description: "Campeón, finalistas, goleador y premios del cuadro",
+        description:
+          "Campeón, subcampeón, tercer puesto, goleador y asistidor. Los premios de semifinalista y finalista aparecen en el partido que los consagró",
         topScorerPick: bonusExtras?.topScorerPick ?? null,
         topScorerOfficial: bonusExtras?.topScorerOfficial ?? null,
         topScorerCorrect: bonusExtras?.topScorerCorrect ?? null,
@@ -227,7 +228,7 @@ export async function fetchUserScores(userId: number) {
       wt.name AS official_advancing_team_name,
       wt.logo_url AS official_advancing_team_logo_url
     FROM prediction_scores ps
-    JOIN matches m ON m.id = ps.source_id AND ps.source_type = 'MATCH'
+    JOIN matches m ON m.id = ps.source_id AND ps.source_type IN ('MATCH', 'BRACKET_PRIZE')
     JOIN teams ht ON ht.id = m.home_team_id
     JOIN teams at ON at.id = m.away_team_id
     LEFT JOIN groups g ON g.id = m.group_id
@@ -245,7 +246,7 @@ export async function fetchUserScores(userId: number) {
   const extrasResult = await pool.query(
     `SELECT source_type, source_id, points, breakdown, updated_at
     FROM prediction_scores
-    WHERE user_id = $1 AND source_type <> 'MATCH'
+    WHERE user_id = $1 AND source_type NOT IN ('MATCH', 'BRACKET_PRIZE')
     ORDER BY updated_at DESC`,
     [userId],
   );
@@ -271,12 +272,35 @@ export async function fetchUserScores(userId: number) {
 
   const totalPoints = totalResult.rows[0].total_points as number;
 
+  // Un partido puede tener dos filas: la del puntaje del partido ('MATCH') y la del premio del
+  // cuadro que consagró ('BRACKET_PRIZE', p. ej. finalista). Se fusionan en una sola tarjeta.
+  type MatchScoreRow = (typeof matchesResult.rows)[number];
+  const foldedMatches: MatchScoreRow[] = [];
+  const matchRowById = new Map<number, MatchScoreRow>();
+  for (const row of matchesResult.rows) {
+    const matchId = Number(row.match_id);
+    const existing = matchRowById.get(matchId);
+    if (existing) {
+      existing.points = Number(existing.points ?? 0) + Number(row.points ?? 0);
+      existing.breakdown = {
+        ...((existing.breakdown ?? {}) as Record<string, number>),
+        ...((row.breakdown ?? {}) as Record<string, number>),
+      };
+    } else {
+      matchRowById.set(matchId, row);
+      foldedMatches.push(row);
+    }
+  }
+
+  const matchPointsTotal =
+    (totalsBySource.MATCH ?? 0) + (totalsBySource.BRACKET_PRIZE ?? 0);
+
   return {
     totalPoints,
     totalsBySource,
-    matchPointsTotal: totalsBySource.MATCH ?? 0,
-    extrasPointsTotal: totalPoints - (totalsBySource.MATCH ?? 0),
-    matches: matchesResult.rows.map((row) => {
+    matchPointsTotal,
+    extrasPointsTotal: totalPoints - matchPointsTotal,
+    matches: foldedMatches.map((row) => {
       const predictedMatchup = predictedMatchupFromRow({
         stage: row.stage as string,
         predicted_home_score: row.predicted_home_score as number | null,

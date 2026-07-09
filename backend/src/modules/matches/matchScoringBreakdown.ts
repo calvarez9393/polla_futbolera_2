@@ -60,8 +60,9 @@ export async function getMatchScoringBreakdown(matchId: number): Promise<MatchSc
       bht.name AS bracket_home_team_name,
       bat.name AS bracket_away_team_name,
       adv.name AS predicted_advancing_team_name,
-      ps.points,
-      ps.breakdown
+      CASE WHEN ps.points IS NULL AND pz.points IS NULL THEN NULL
+           ELSE COALESCE(ps.points, 0) + COALESCE(pz.points, 0) END AS points,
+      COALESCE(ps.breakdown, '{}'::jsonb) || COALESCE(pz.breakdown, '{}'::jsonb) AS breakdown
     FROM predictions p
     JOIN users u ON u.id = p.user_id
     LEFT JOIN teams bht ON bht.id = p.bracket_home_team_id
@@ -69,8 +70,10 @@ export async function getMatchScoringBreakdown(matchId: number): Promise<MatchSc
     LEFT JOIN teams adv ON adv.id = p.predicted_advancing_team_id
     LEFT JOIN prediction_scores ps
       ON ps.user_id = p.user_id AND ps.source_type = 'MATCH' AND ps.source_id = p.match_id
+    LEFT JOIN prediction_scores pz
+      ON pz.user_id = p.user_id AND pz.source_type = 'BRACKET_PRIZE' AND pz.source_id = p.match_id
     WHERE p.match_id = $1
-    ORDER BY ps.points DESC NULLS LAST, u.display_name, u.email`,
+    ORDER BY (COALESCE(ps.points, 0) + COALESCE(pz.points, 0)) DESC, u.display_name, u.email`,
     [matchId]
   );
 

@@ -78,12 +78,15 @@ predictionsRouter.get("/me/calendar", async (req, res, next) => {
         p.predicted_away_score,
         p.predicted_advancing_team_id,
         ${predictionBracketSelectFields},
-        ps.points AS earned_points,
-        ps.breakdown AS earned_breakdown
+        CASE WHEN ps.points IS NULL AND pz.points IS NULL THEN NULL
+             ELSE COALESCE(ps.points, 0) + COALESCE(pz.points, 0) END AS earned_points,
+        CASE WHEN ps.breakdown IS NULL AND pz.breakdown IS NULL THEN NULL
+             ELSE COALESCE(ps.breakdown, '{}'::jsonb) || COALESCE(pz.breakdown, '{}'::jsonb) END AS earned_breakdown
       ${matchFromClause}
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $3
       ${predictionBracketJoinClause}
       LEFT JOIN prediction_scores ps ON ps.source_type = 'MATCH' AND ps.source_id = m.id AND ps.user_id = $3
+      LEFT JOIN prediction_scores pz ON pz.source_type = 'BRACKET_PRIZE' AND pz.source_id = m.id AND pz.user_id = $3
       WHERE ${conditions.join(" AND ")}
       ORDER BY m.starts_at ASC`,
       params
@@ -296,12 +299,15 @@ predictionsRouter.get("/me/bracket", async (req, res, next) => {
         p.predicted_away_score,
         p.predicted_advancing_team_id,
         ${predictionBracketSelectFields},
-        ps.points AS earned_points,
-        ps.breakdown AS earned_breakdown
+        CASE WHEN ps.points IS NULL AND pz.points IS NULL THEN NULL
+             ELSE COALESCE(ps.points, 0) + COALESCE(pz.points, 0) END AS earned_points,
+        CASE WHEN ps.breakdown IS NULL AND pz.breakdown IS NULL THEN NULL
+             ELSE COALESCE(ps.breakdown, '{}'::jsonb) || COALESCE(pz.breakdown, '{}'::jsonb) END AS earned_breakdown
       ${matchFromClause}
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $2
       ${predictionBracketJoinClause}
       LEFT JOIN prediction_scores ps ON ps.source_type = 'MATCH' AND ps.source_id = m.id AND ps.user_id = $2
+      LEFT JOIN prediction_scores pz ON pz.source_type = 'BRACKET_PRIZE' AND pz.source_id = m.id AND pz.user_id = $2
       WHERE ${activeTournamentCondition("m", 1)} AND m.stage = 'KNOCKOUT'
       ORDER BY
         CASE m.round_key

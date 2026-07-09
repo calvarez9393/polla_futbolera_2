@@ -8,6 +8,9 @@ export interface OfficialBonusResults {
   thirdPlaceTeamId?: number | null;
   semifinalistTeamIds?: number[];
   finalistTeamIds?: number[];
+  /** equipo → matches.id del partido que lo consagró (para asignar el premio a ese partido). */
+  semifinalistSourceMatchIds?: Record<string, number>;
+  finalistSourceMatchIds?: Record<string, number>;
   topScorer?: string | null;
   topAssister?: string | null;
 }
@@ -193,6 +196,45 @@ function buildTeamPickComparison(
   };
 }
 
+export interface PrizeAllocation {
+  /** matches.id → puntos de esta categoría asignados a ese partido. */
+  byMatch: Map<number, number>;
+  /** Puntos de equipos sin partido de origen conocido: van al cuadro de bonus como antes. */
+  unsourced: number;
+}
+
+/**
+ * Reparte los puntos de una categoría (semifinalistas/finalistas) entre los partidos que
+ * consagraron a cada equipo acertado, respetando el tope total de la categoría. Los aciertos
+ * con partido conocido se pagan primero (en orden de partido) para que el tope sea determinista.
+ */
+export function allocatePrizePointsByMatch(
+  hitIds: number[],
+  sources: Record<string, number>,
+  pointsPerHit: number,
+  maxPoints: number
+): PrizeAllocation {
+  const byMatch = new Map<number, number>();
+  let unsourced = 0;
+  let remaining = maxPoints;
+  const ordered = [...hitIds].sort(
+    (a, b) =>
+      (sources[a] ?? Number.MAX_SAFE_INTEGER) - (sources[b] ?? Number.MAX_SAFE_INTEGER) || a - b
+  );
+  for (const teamId of ordered) {
+    const pts = Math.min(pointsPerHit, remaining);
+    if (pts <= 0) break;
+    remaining -= pts;
+    const matchId = sources[teamId];
+    if (matchId != null) {
+      byMatch.set(matchId, (byMatch.get(matchId) ?? 0) + pts);
+    } else {
+      unsourced += pts;
+    }
+  }
+  return { byMatch, unsourced };
+}
+
 function logTeamPickComparisons(
   category: string,
   official: { ids: number[]; names: string[] },
@@ -265,10 +307,24 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
   const semifinalistComparisons: TeamPickComparison[] = [];
   let usersScored = 0;
 
+  const semiSources = official.semifinalistSourceMatchIds ?? {};
+  const finalSources = official.finalistSourceMatchIds ?? {};
+  // Los premios por partido se reconstruyen completos en cada recálculo: así una corrección de
+  // resultado también revoca premios que ya no correspondan.
+  await pool.query(`DELETE FROM prediction_scores WHERE source_type = 'BRACKET_PRIZE'`);
+
   for (const row of preds.rows) {
     const userLabel = String(row.display_name ?? row.email ?? row.user_id);
     let points = 0;
     const breakdown: Record<string, number> = {};
+    const prizeByMatch = new Map<number, Record<string, number>>();
+    const addPrize = (alloc: PrizeAllocation, key: "semifinalists" | "finalists") => {
+      for (const [matchId, pts] of alloc.byMatch) {
+        const slot = prizeByMatch.get(matchId) ?? {};
+        slot[key] = (slot[key] ?? 0) + pts;
+        prizeByMatch.set(matchId, slot);
+      }
+    };
 
     if (official.championTeamId && row.champion_team_id === official.championTeamId) {
       breakdown.champion = rules.champion_points;
@@ -296,8 +352,19 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
         predSemi.length > 0
       );
       semifinalistComparisons.push(semiCmp);
-      if (semiCmp.points > 0) breakdown.semifinalists = semiCmp.points;
-      points += semiCmp.points;
+      if (semiCmp.points > 0) {
+        const alloc = allocatePrizePointsByMatch(
+          semiCmp.hitIds,
+          semiSources,
+          rules.semifinalist_points,
+          rules.semifinalist_max_points
+        );
+        addPrize(alloc, "semifinalists");
+        if (alloc.unsourced > 0) {
+          breakdown.semifinalists = alloc.unsourced;
+          points += alloc.unsourced;
+        }
+      }
     }
 
     const predFinal = parseIdArray(row.finalist_team_ids);
@@ -313,8 +380,19 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
         predFinal.length > 0
       );
       finalistComparisons.push(finalCmp);
-      if (finalCmp.points > 0) breakdown.finalists = finalCmp.points;
-      points += finalCmp.points;
+      if (finalCmp.points > 0) {
+        const alloc = allocatePrizePointsByMatch(
+          finalCmp.hitIds,
+          finalSources,
+          rules.finalist_points,
+          rules.finalist_max_points
+        );
+        addPrize(alloc, "finalists");
+        if (alloc.unsourced > 0) {
+          breakdown.finalists = alloc.unsourced;
+          points += alloc.unsourced;
+        }
+      }
     }
 
     // Goleador y máximo asistidor: el admin marca manualmente quién acertó
@@ -337,6 +415,19 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
       DO UPDATE SET points = EXCLUDED.points, breakdown = EXCLUDED.breakdown, updated_at = NOW()`,
       [row.user_id, points, JSON.stringify(breakdown)]
     );
+
+    // Premio del cuadro asignado al partido que lo consagró (se ve en el desglose del partido).
+    for (const [matchId, prizeBreakdown] of prizeByMatch) {
+      const prizePoints = Object.values(prizeBreakdown).reduce((acc, v) => acc + v, 0);
+      if (prizePoints <= 0) continue;
+      await pool.query(
+        `INSERT INTO prediction_scores (user_id, source_type, source_id, points, breakdown)
+        VALUES ($1, 'BRACKET_PRIZE', $2, $3, $4::jsonb)
+        ON CONFLICT (user_id, source_type, source_id)
+        DO UPDATE SET points = EXCLUDED.points, breakdown = EXCLUDED.breakdown, updated_at = NOW()`,
+        [row.user_id, matchId, prizePoints, JSON.stringify(prizeBreakdown)]
+      );
+    }
     usersScored += 1;
   }
 
