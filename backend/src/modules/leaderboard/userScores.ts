@@ -106,6 +106,14 @@ function mapExtraScore(
         description:
           "Puntos asignados manualmente por ingresar tarde a la polla",
       };
+    case "GROUP_PHASE_BONUS":
+      return {
+        ...base,
+        section: "phase1" as const,
+        title: "Bono fase de grupos",
+        description:
+          "Puntos del cuadro otorgados durante la fase de grupos que se conservan",
+      };
     default:
       return {
         ...base,

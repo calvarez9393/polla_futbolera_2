@@ -16,7 +16,8 @@ export const BREAKDOWN_LABELS: Record<string, string> = {
   topAssister: "Máx. asistidor",
   expertDay: "Experto del día",
   invicto: "Invicto",
-  groupMaster: "Maestro de grupo"
+  groupMaster: "Maestro de grupo",
+  groupPhaseBonus: "Bono fase de grupos"
 };
 
 export const ROUND_LABELS: Record<string, string> = {
