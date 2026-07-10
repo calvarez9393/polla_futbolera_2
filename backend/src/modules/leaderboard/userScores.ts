@@ -67,7 +67,7 @@ function mapExtraScore(
         section: "bonuses" as const,
         title: "Cuadro y premios especiales",
         description:
-          "Campeón, subcampeón, tercer puesto, goleador y asistidor. Los premios de semifinalista y finalista aparecen en el partido que los consagró",
+          "Goleador y máximo asistidor. Los premios del cuadro (campeón, subcampeón, tercer puesto, finalistas y semifinalistas) aparecen en el partido que los consagró",
         topScorerPick: bonusExtras?.topScorerPick ?? null,
         topScorerOfficial: bonusExtras?.topScorerOfficial ?? null,
         topScorerCorrect: bonusExtras?.topScorerCorrect ?? null,

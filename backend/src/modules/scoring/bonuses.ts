@@ -11,6 +11,9 @@ export interface OfficialBonusResults {
   /** equipo → matches.id del partido que lo consagró (para asignar el premio a ese partido). */
   semifinalistSourceMatchIds?: Record<string, number>;
   finalistSourceMatchIds?: Record<string, number>;
+  /** Partido de la final (consagra campeón y subcampeón) y del tercer puesto. */
+  championMatchId?: number | null;
+  thirdPlaceMatchId?: number | null;
   topScorer?: string | null;
   topAssister?: string | null;
 }
@@ -325,18 +328,27 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
         prizeByMatch.set(matchId, slot);
       }
     };
+    // Premio de un solo equipo (campeón, subcampeón, tercer puesto): va al partido que lo
+    // consagró; si no se conoce (resultado fijado a mano), cae al cuadro de bonus como antes.
+    const addSinglePrize = (matchId: number | null | undefined, key: string, pts: number) => {
+      if (matchId != null) {
+        const slot = prizeByMatch.get(Number(matchId)) ?? {};
+        slot[key] = (slot[key] ?? 0) + pts;
+        prizeByMatch.set(Number(matchId), slot);
+      } else {
+        breakdown[key] = pts;
+        points += pts;
+      }
+    };
 
     if (official.championTeamId && row.champion_team_id === official.championTeamId) {
-      breakdown.champion = rules.champion_points;
-      points += rules.champion_points;
+      addSinglePrize(official.championMatchId, "champion", rules.champion_points);
     }
     if (official.runnerUpTeamId && row.runner_up_team_id === official.runnerUpTeamId) {
-      breakdown.runnerUp = rules.runner_up_points;
-      points += rules.runner_up_points;
+      addSinglePrize(official.championMatchId, "runnerUp", rules.runner_up_points);
     }
     if (official.thirdPlaceTeamId && row.third_place_team_id === official.thirdPlaceTeamId) {
-      breakdown.thirdPlace = rules.third_place_points;
-      points += rules.third_place_points;
+      addSinglePrize(official.thirdPlaceMatchId, "thirdPlace", rules.third_place_points);
     }
 
     const predSemi = parseIdArray(row.semifinalist_team_ids);

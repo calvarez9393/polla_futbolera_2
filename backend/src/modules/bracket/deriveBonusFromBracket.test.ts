@@ -171,5 +171,36 @@ describe("buildOfficialBracketBonusPicks", () => {
     // finalista → la semifinal que ganó.
     expect(official.semifinalistSourceMatchIds).toEqual({ [String(A)]: 1, [String(D)]: 2 });
     expect(official.finalistSourceMatchIds).toEqual({ [String(A)]: 3 });
+    expect(official.championMatchId).toBeNull();
+    expect(official.thirdPlaceMatchId).toBeNull();
+  });
+
+  it("campeón y subcampeón quedan asignados a la final; tercer puesto a su partido", () => {
+    const rows: KnockoutMatchRow[] = [
+      { ...koRow(3, 101, A, B, "SF"), status: "FINISHED", home_score: 2, away_score: 0, winner_team_id: A },
+      { ...koRow(4, 102, C, D, "SF"), status: "FINISHED", home_score: 0, away_score: 3, winner_team_id: D },
+      { ...koRow(6, 103, TBD, TBD, "TP3"), status: "FINISHED", home_score: 1, away_score: 0 },
+      { ...koRow(5, 104, TBD, TBD, "F"), status: "FINISHED", home_score: 2, away_score: 1 }
+    ];
+    const resolved = resolveOfficialKnockoutBracketTeams(rows, TBD);
+    const official = buildOfficialBracketBonusPicks(
+      rows,
+      roundMap([
+        [3, "SF"],
+        [4, "SF"],
+        [5, "F"],
+        [6, "TP3"]
+      ]),
+      resolved,
+      TBD
+    );
+
+    // Final: A (ganador SF 101) 2-1 D (ganador SF 102). Tercer puesto: B 1-0 C.
+    expect(official.championTeamId).toBe(A);
+    expect(official.runnerUpTeamId).toBe(D);
+    expect(official.thirdPlaceTeamId).toBe(B);
+    expect(official.championMatchId).toBe(5);
+    expect(official.thirdPlaceMatchId).toBe(6);
+    expect(official.finalistTeamIds).toEqual(expect.arrayContaining([A, D]));
   });
 });

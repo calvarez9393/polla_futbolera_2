@@ -38,6 +38,9 @@ export interface OfficialBracketBonusPicks extends DerivedBracketBonusPicks {
    */
   semifinalistSourceMatchIds: Record<string, number>;
   finalistSourceMatchIds: Record<string, number>;
+  /** Partido de la final (consagra campeón y subcampeón) y del tercer puesto. */
+  championMatchId: number | null;
+  thirdPlaceMatchId: number | null;
 }
 
 function uniqueValidTeamIds(ids: Array<number | string>, tbdId: number): number[] {
@@ -309,6 +312,8 @@ export function buildOfficialBracketBonusPicks(
   let championTeamId: number | null = null;
   let runnerUpTeamId: number | null = null;
   let thirdPlaceTeamId: number | null = null;
+  let championMatchId: number | null = null;
+  let thirdPlaceMatchId: number | null = null;
 
   for (const row of rows) {
     const round = roundByMatchId.get(Number(row.id))?.toUpperCase();
@@ -324,16 +329,19 @@ export function buildOfficialBracketBonusPicks(
 
     if (round === "F") {
       championTeamId = adv;
+      championMatchId = Number(row.id);
       const other = homeId === adv ? awayId : homeId;
       runnerUpTeamId = other !== tbdId ? other : null;
     } else if (round === "TP3") {
       thirdPlaceTeamId = adv;
+      thirdPlaceMatchId = Number(row.id);
     }
   }
 
-  const finalWinners = [...winnersWithMatch("F").keys()];
-  if (!championTeamId && finalWinners.length === 1) {
-    championTeamId = finalWinners[0];
+  const finalWinnerEntries = [...winnersWithMatch("F")];
+  if (!championTeamId && finalWinnerEntries.length === 1) {
+    championTeamId = finalWinnerEntries[0][0];
+    championMatchId = finalWinnerEntries[0][1];
   }
 
   const cappedSemifinalists = semifinalistTeamIds.slice(0, 4);
@@ -348,7 +356,9 @@ export function buildOfficialBracketBonusPicks(
     semifinalistTeamIds: cappedSemifinalists,
     finalistTeamIds: cappedFinalists,
     semifinalistSourceMatchIds: sourcesFor(cappedSemifinalists, semiSources),
-    finalistSourceMatchIds: sourcesFor(cappedFinalists, finalSources)
+    finalistSourceMatchIds: sourcesFor(cappedFinalists, finalSources),
+    championMatchId,
+    thirdPlaceMatchId
   };
 }
 
@@ -362,7 +372,9 @@ export async function deriveOfficialBonusFromRealBracket(
     semifinalistTeamIds: [],
     finalistTeamIds: [],
     semifinalistSourceMatchIds: {},
-    finalistSourceMatchIds: {}
+    finalistSourceMatchIds: {},
+    championMatchId: null,
+    thirdPlaceMatchId: null
   };
 
   const rows = await loadKnockoutRowsForTournament(tournamentId);
@@ -559,7 +571,9 @@ export async function syncOfficialBonusResultsAndScore(): Promise<
     semifinalistTeamIds: derived.semifinalistTeamIds,
     finalistTeamIds: derived.finalistTeamIds,
     semifinalistSourceMatchIds: derived.semifinalistSourceMatchIds,
-    finalistSourceMatchIds: derived.finalistSourceMatchIds
+    finalistSourceMatchIds: derived.finalistSourceMatchIds,
+    championMatchId: derived.championMatchId,
+    thirdPlaceMatchId: derived.thirdPlaceMatchId
   };
   await setOfficialBonusResults(official);
 
