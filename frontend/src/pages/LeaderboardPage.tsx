@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { getUser } from "../lib/auth";
 import { Modal } from "../components/Modal";
-import { PageTitle } from "../components/InfoModal";
+import { InfoModal, PageTitle } from "../components/InfoModal";
 import { UserPointsDetail } from "../components/UserPointsDetail";
 
 interface LeaderRow {
@@ -11,6 +11,10 @@ interface LeaderRow {
   display_name?: string | null;
   amount_paid?: number;
   total_points: number;
+  exact_scores?: number;
+  qualified_correct?: number;
+  knockout_advancing?: number;
+  late_stage_points?: number;
 }
 
 interface LeaderboardResponse {
@@ -39,6 +43,15 @@ function rankClass(index: number): string {
   if (index === 1) return " leaderboard-rank--silver";
   if (index === 2) return " leaderboard-rank--bronze";
   return "";
+}
+
+function tiebreakStats(row: LeaderRow) {
+  return {
+    exact: row.exact_scores ?? 0,
+    qualified: row.qualified_correct ?? 0,
+    advancing: row.knockout_advancing ?? 0,
+    lateStage: row.late_stage_points ?? 0
+  };
 }
 
 export function LeaderboardPage() {
@@ -165,17 +178,71 @@ export function LeaderboardPage() {
             {rows.map((row, index) => {
               const name = playerName(row);
               const isMe = Number(row.user_id) === me?.id;
+              const stats = tiebreakStats(row);
               return (
                 <li
                   key={row.user_id}
                   className={`leaderboard-row${isMe ? " leaderboard-row--me" : ""}`}
                 >
                   <span className={`leaderboard-rank${rankClass(index)}`}>{index + 1}</span>
-                  <span className="leaderboard-name">
-                    {name}
-                    {isMe && <span className="leaderboard-you">Tú</span>}
-                  </span>
-                  <span className="leaderboard-points">{row.total_points}</span>
+                  <div className="leaderboard-player">
+                    <span className="leaderboard-name">
+                      {name}
+                      {isMe && <span className="leaderboard-you">Tú</span>}
+                    </span>
+                    <p className="leaderboard-tiebreak" aria-label="Criterios de desempate">
+                      <span>
+                        Exactos <strong>{stats.exact}</strong>
+                      </span>
+                      <span className="leaderboard-tiebreak-sep" aria-hidden>
+                        ·
+                      </span>
+                      <span>
+                        Clasif. <strong>{stats.qualified}</strong>
+                      </span>
+                      <span className="leaderboard-tiebreak-sep" aria-hidden>
+                        ·
+                      </span>
+                      <span>
+                        Avances <strong>{stats.advancing}</strong>
+                      </span>
+                      <span className="leaderboard-tiebreak-sep" aria-hidden>
+                        ·
+                      </span>
+                      <span>
+                        SF+F <strong>{stats.lateStage}</strong>
+                      </span>
+                    </p>
+                  </div>
+                  <div className="leaderboard-points-cell">
+                    <span className="leaderboard-points">{row.total_points}</span>
+                    <InfoModal
+                      title={`Desempates — ${name}`}
+                      className="leaderboard-tiebreak-info"
+                    >
+                      <p>
+                        El orden se define primero por puntos totales. Si hay empate, se usa esta
+                        secuencia:
+                      </p>
+                      <ol className="leaderboard-tiebreak-help">
+                        <li>
+                          <strong>Puntos totales:</strong> {row.total_points}
+                        </li>
+                        <li>
+                          <strong>Marcadores exactos:</strong> {stats.exact}
+                        </li>
+                        <li>
+                          <strong>Clasificados acertados</strong> (cuadro de 32): {stats.qualified}
+                        </li>
+                        <li>
+                          <strong>Equipos que avanzaron</strong> (octavos → final): {stats.advancing}
+                        </li>
+                        <li>
+                          <strong>Puntos en semis + final:</strong> {stats.lateStage}
+                        </li>
+                      </ol>
+                    </InfoModal>
+                  </div>
                   <button
                     type="button"
                     className="btn-ghost leaderboard-view-btn"
