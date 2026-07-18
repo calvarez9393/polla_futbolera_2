@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocatePrizePointsByMatch } from "./bonuses.js";
+import { allocatePrizePointsByMatch, sameTeamId } from "./bonuses.js";
 
 const A = 10;
 const B = 11;
@@ -42,5 +42,23 @@ describe("allocatePrizePointsByMatch", () => {
     const alloc = allocatePrizePointsByMatch([], {}, 10, 40);
     expect(alloc.byMatch.size).toBe(0);
     expect(alloc.unsourced).toBe(0);
+  });
+});
+
+describe("sameTeamId", () => {
+  it("acierta aunque la BD devuelva el BIGINT como string y el oficial sea número", () => {
+    expect(sameTeamId("52", 52)).toBe(true);
+    expect(sameTeamId(52, "52")).toBe(true);
+    expect(sameTeamId(52, 52)).toBe(true);
+    expect(sameTeamId("52", "52")).toBe(true);
+  });
+
+  it("no acierta con ids distintos, nulos o inválidos", () => {
+    expect(sameTeamId("52", 53)).toBe(false);
+    expect(sameTeamId(null, 52)).toBe(false);
+    expect(sameTeamId("52", null)).toBe(false);
+    expect(sameTeamId(undefined, undefined)).toBe(false);
+    expect(sameTeamId("abc", NaN)).toBe(false);
+    expect(sameTeamId(0, 0)).toBe(false);
   });
 });

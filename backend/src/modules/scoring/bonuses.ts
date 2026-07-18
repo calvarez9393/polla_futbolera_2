@@ -113,6 +113,17 @@ export async function saveBonusExtrasMarks(marks: BonusExtrasMark[]): Promise<nu
   return updated;
 }
 
+/**
+ * Compara ids de equipo que pueden llegar como string (node-pg devuelve BIGINT como string)
+ * o como número (JSON de resultados oficiales). Un === directo entre ambos siempre da falso.
+ */
+export function sameTeamId(a: unknown, b: unknown): boolean {
+  if (a == null || b == null) return false;
+  const na = Number(a);
+  const nb = Number(b);
+  return !Number.isNaN(na) && na > 0 && na === nb;
+}
+
 function parseIdArray(raw: unknown): number[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((v) => Number(v)).filter((id) => id > 0 && !Number.isNaN(id));
@@ -341,13 +352,13 @@ export async function calculateBonusScores(): Promise<CalculateBonusScoresResult
       }
     };
 
-    if (official.championTeamId && row.champion_team_id === official.championTeamId) {
+    if (sameTeamId(row.champion_team_id, official.championTeamId)) {
       addSinglePrize(official.championMatchId, "champion", rules.champion_points);
     }
-    if (official.runnerUpTeamId && row.runner_up_team_id === official.runnerUpTeamId) {
+    if (sameTeamId(row.runner_up_team_id, official.runnerUpTeamId)) {
       addSinglePrize(official.championMatchId, "runnerUp", rules.runner_up_points);
     }
-    if (official.thirdPlaceTeamId && row.third_place_team_id === official.thirdPlaceTeamId) {
+    if (sameTeamId(row.third_place_team_id, official.thirdPlaceTeamId)) {
       addSinglePrize(official.thirdPlaceMatchId, "thirdPlace", rules.third_place_points);
     }
 
