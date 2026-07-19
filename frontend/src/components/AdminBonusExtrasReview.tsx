@@ -63,6 +63,19 @@ export function AdminBonusExtrasReview({ onMessage }: Props) {
   }
 
   async function save(thenCalculate: boolean) {
+    if (thenCalculate) {
+      // Sin el nombre real, los aciertos marcados NO dan puntos (el cálculo exige ambos).
+      const faltantes: string[] = [];
+      if (participants.some((p) => p.topScorerCorrect) && !topScorer.trim()) faltantes.push("goleador");
+      if (participants.some((p) => p.topAssisterCorrect) && !topAssister.trim()) faltantes.push("asistidor");
+      if (faltantes.length > 0) {
+        onMessage(
+          `Escribe el ${faltantes.join(" y el ")} real del Mundial antes de calcular: sin ese nombre los aciertos marcados no dan puntos.`,
+          true
+        );
+        return;
+      }
+    }
     setSaving(true);
     try {
       await api("/admin/official/bonus-extras-review", {
